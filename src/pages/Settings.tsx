@@ -1,13 +1,42 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../lib/supabase/auth';
 import { supabase } from '../lib/supabase/client';
-import { Shield, Mail, User, ListPlus, Trash2, Plus } from 'lucide-react';
+import { Shield, Mail, User, ListPlus, Trash2, Plus, KeyRound, Eye, EyeOff } from 'lucide-react';
 
 export default function Settings() {
   const { profile, selectedProject, userProjects } = useAuth();
   
   const [fields, setFields] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Cambio de password
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [pwdMsg, setPwdMsg] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
+  const [pwdLoading, setPwdLoading] = useState(false);
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      setPwdMsg({ type: 'error', text: 'Las contraseñas no coinciden.' });
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPwdMsg({ type: 'error', text: 'Mínimo 6 caracteres.' });
+      return;
+    }
+    setPwdLoading(true);
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) {
+      setPwdMsg({ type: 'error', text: error.message });
+    } else {
+      setPwdMsg({ type: 'ok', text: '✅ Password actualizado correctamente.' });
+      setNewPassword('');
+      setConfirmPassword('');
+    }
+    setPwdLoading(false);
+  };
   
   const [targetProjectId, setTargetProjectId] = useState('');
   const [newFieldName, setNewFieldName] = useState('');
@@ -179,7 +208,7 @@ export default function Settings() {
             Mi Perfil
           </h2>
         </div>
-        <div className="p-6 space-y-4">
+        <div className="p-6 space-y-6">
           <div className="flex items-center">
             <Mail className="w-5 h-5 text-gray-400 mr-3" />
             <div>
@@ -193,6 +222,41 @@ export default function Settings() {
               <p className="text-sm font-medium text-gray-500">Nivel de Acceso (Rol)</p>
               <p className="text-base font-bold text-blue-700">{profile?.role}</p>
             </div>
+          </div>
+
+          {/* Cambiar Password */}
+          <div className="border-t border-gray-100 pt-4">
+            <div className="flex items-center mb-3">
+              <KeyRound className="w-5 h-5 text-gray-400 mr-2" />
+              <p className="text-sm font-semibold text-gray-700">Cambiar Contraseña</p>
+            </div>
+            <form onSubmit={handleChangePassword} className="space-y-3 max-w-sm">
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  placeholder="Nueva contraseña"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none pr-10"
+                />
+                <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600">
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={confirmPassword}
+                onChange={e => setConfirmPassword(e.target.value)}
+                placeholder="Confirmar contraseña"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              />
+              {pwdMsg && (
+                <p className={`text-sm font-medium ${pwdMsg.type === 'ok' ? 'text-green-600' : 'text-red-600'}`}>{pwdMsg.text}</p>
+              )}
+              <button type="submit" disabled={pwdLoading} className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                {pwdLoading ? 'Guardando...' : 'Actualizar Contraseña'}
+              </button>
+            </form>
           </div>
         </div>
       </div>
