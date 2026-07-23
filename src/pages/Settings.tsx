@@ -151,7 +151,7 @@ export default function Settings() {
                   <h3 className="font-bold text-gray-800 text-sm">Proyecto: {projectName}</h3>
                 </div>
                 <div className="divide-y divide-gray-100">
-                  {projectFields.map(field => (
+                  {(projectFields as any[]).map((field: any) => (
                     <div key={field.id} className="flex items-center justify-between p-4 bg-white hover:bg-gray-50 transition-colors">
                       <div>
                         <span className="font-bold text-gray-800 text-sm">{field.name}</span>
