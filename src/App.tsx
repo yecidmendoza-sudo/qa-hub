@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { type ReactElement } from 'react';
 import { AuthProvider, useAuth } from './lib/supabase/auth';
 import Layout from './components/Layout';
@@ -37,9 +37,9 @@ function AppRoutes() {
 function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
+      <HashRouter>
         <AppRoutes />
-      </BrowserRouter>
+      </HashRouter>
     </AuthProvider>
   );
 }
