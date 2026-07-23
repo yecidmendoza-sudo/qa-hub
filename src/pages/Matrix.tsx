@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Check, X, AlertTriangle, Clock, Plus, Trash2, Settings2 } from 'lucide-react';
 import { useAuth } from '../lib/supabase/auth';
-import { supabase } from '../lib/supabase/client';
 import {
   fetchMatrix,
   addCustomColumn,

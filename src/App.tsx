@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { type ReactElement } from 'react';
 import { AuthProvider, useAuth } from './lib/supabase/auth';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
@@ -8,7 +9,7 @@ import Login from './pages/Login';
 import Projects from './pages/Projects';
 import Settings from './pages/Settings';
 
-const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
+const ProtectedRoute = ({ children }: { children: ReactElement }) => {
   const { session, loading } = useAuth();
   
   if (loading) return <div className="min-h-screen flex items-center justify-center">Cargando...</div>;

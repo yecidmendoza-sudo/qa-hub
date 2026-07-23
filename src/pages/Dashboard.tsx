@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase/client';
-import { Activity, CheckCircle2, XCircle, AlertCircle, TrendingUp } from 'lucide-react';
+import { Activity, CheckCircle2, XCircle, TrendingUp } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../lib/supabase/auth';
 
@@ -125,13 +125,15 @@ export default function Dashboard() {
               <p>Este proyecto aún no tiene ciclos de pruebas.</p>
             </div>
           ) : (
-            Object.entries(groupedByVersion).map(([versionName, versionCycles]) => (
+            Object.entries(groupedByVersion).map(([versionName, versionCycles]) => {
+              const cycles = versionCycles as any[];
+              return (
               <div key={versionName} className="border border-gray-200 rounded-lg p-5">
                 <h3 className="text-md font-bold text-gray-800 mb-4 border-b border-gray-100 pb-2">
                   Versión: {versionName}
                 </h3>
                 <div className="space-y-4">
-                  {versionCycles.map(cycle => {
+                  {cycles.map(cycle => {
                     let percentage = 0;
                     if (cycle.status === 'PASSED' || cycle.status === 'FAILED') percentage = 100;
                     else if (cycle.status === 'IN_PROGRESS') percentage = 50;
@@ -171,7 +173,8 @@ export default function Dashboard() {
                   })}
                 </div>
               </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
