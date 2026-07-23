@@ -1,12 +1,19 @@
 import { useState } from 'react';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase/client';
+import { useAuth } from '../lib/supabase/auth';
 import { KeyRound, Mail, AlertCircle } from 'lucide-react';
 
 export default function Login() {
+  const { session } = useAuth();
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Si ya hay sesión activa, redirigir al dashboard
+  if (session) return <Navigate to="/" replace />;
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,6 +27,8 @@ export default function Login() {
 
     if (error) {
       setError(error.message);
+    } else {
+      navigate('/');
     }
     setLoading(false);
   };
