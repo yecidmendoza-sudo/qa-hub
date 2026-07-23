@@ -226,6 +226,8 @@ export default function Cycles() {
               <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition-transform ${defaultExpanded ? 'translate-x-6' : 'translate-x-1'}`} />
             </button>
             <span className="text-sm text-gray-500 whitespace-nowrap">{defaultExpanded ? 'Colapsar todo' : 'Expandir todo'}</span>
+          </div>
+        </div>
       </div>
 
       {/* Versions List */}
