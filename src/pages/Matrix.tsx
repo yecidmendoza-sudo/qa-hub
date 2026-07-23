@@ -111,26 +111,26 @@ export default function Matrix() {
     <div className="space-y-6">
 
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <Link to="/cycles" className="text-gray-500 hover:text-gray-900">
-            <ArrowLeft className="w-6 h-6" />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start space-x-3">
+          <Link to="/cycles" className="text-gray-500 hover:text-gray-900 mt-1 flex-shrink-0">
+            <ArrowLeft className="w-5 h-5" />
           </Link>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">
-              {cycle.type} TEST — {cycle.project?.name} {cycle.version}
+          <div className="min-w-0">
+            <h1 className="text-lg sm:text-2xl font-bold text-gray-900 leading-tight">
+              {cycle.type} TEST
             </h1>
-            <p className="text-sm text-gray-500">Editor Dinámico de Matriz</p>
+            <p className="text-sm text-gray-500 truncate">{cycle.project?.name} — {cycle.version}</p>
           </div>
         </div>
         {isAdmin && (
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <CsvImporter cycle={cycle} casesCount={cases.length} onImportDone={loadMatrix} />
             <button
               onClick={() => setIsColModalOpen(true)}
-              className="flex items-center px-4 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-sm font-semibold transition-colors border border-indigo-200"
+              className="flex items-center px-3 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-sm font-semibold transition-colors border border-indigo-200"
             >
-              <Settings2 className="w-4 h-4 mr-2" />
+              <Settings2 className="w-4 h-4 mr-1.5" />
               Añadir Columna
             </button>
           </div>

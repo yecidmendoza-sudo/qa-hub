@@ -174,50 +174,58 @@ export default function Cycles() {
     <div className="space-y-6">
 
       {/* Top Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold text-gray-900">Ciclos de Pruebas: {selectedProject.name}</h1>
-        <div className="flex space-x-3">
-          <button onClick={openAudit} className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg font-medium flex items-center hover:bg-gray-50 transition-colors">
-            <History className="w-5 h-5 mr-2" /> Historial
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">
+          Ciclos: <span className="text-blue-600">{selectedProject.name}</span>
+        </h1>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={openAudit} className="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-lg font-medium flex items-center hover:bg-gray-50 transition-colors text-sm">
+            <History className="w-4 h-4 mr-1.5" /> Historial
           </button>
           {isAdmin && (
-            <button onClick={() => setIsVersionModalOpen(true)} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium flex items-center hover:bg-blue-700 transition-colors shadow-sm">
-              <Plus className="w-5 h-5 mr-1" /> Nuevo Release
+            <button onClick={() => setIsVersionModalOpen(true)} className="bg-blue-600 text-white px-3 py-2 rounded-lg font-medium flex items-center hover:bg-blue-700 transition-colors shadow-sm text-sm">
+              <Plus className="w-4 h-4 mr-1" /> Nuevo Release
             </button>
           )}
         </div>
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex flex-wrap gap-3 items-center">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Buscar versión o tipo de ciclo..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex flex-col gap-3">
+        {/* Search + Sort row */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Buscar versión o tipo..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <select value={dateSort} onChange={e => setDateSort(e.target.value as 'desc' | 'asc')} className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="desc">Más reciente primero</option>
+            <option value="asc">Más antiguo primero</option>
+          </select>
         </div>
-        <div className="flex items-center gap-2">
-          <Calendar className="w-4 h-4 text-gray-400" />
-          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          <span className="text-gray-400 text-sm">→</span>
-          <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-        </div>
-        <select value={dateSort} onChange={e => setDateSort(e.target.value as 'desc' | 'asc')} className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <option value="desc">Más reciente primero</option>
-          <option value="asc">Más antiguo primero</option>
-        </select>
-        <button
-          onClick={toggleAllFolders}
-          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${defaultExpanded ? 'bg-blue-600' : 'bg-gray-300'}`}
-          title={defaultExpanded ? 'Colapsar todo' : 'Expandir todo'}
-        >
-          <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition-transform ${defaultExpanded ? 'translate-x-6' : 'translate-x-1'}`} />
-        </button>
-        <span className="text-sm text-gray-500 whitespace-nowrap">{defaultExpanded ? 'Colapsar todo' : 'Expandir todo'}</span>
+        {/* Date + Toggle row */}
+        <div className="flex flex-wrap gap-3 items-center">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0" />
+            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <span className="text-gray-400 text-sm">→</span>
+            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div className="flex items-center gap-2 ml-auto">
+            <button
+              onClick={toggleAllFolders}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${defaultExpanded ? 'bg-blue-600' : 'bg-gray-300'}`}
+              title={defaultExpanded ? 'Colapsar todo' : 'Expandir todo'}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition-transform ${defaultExpanded ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+            <span className="text-sm text-gray-500 whitespace-nowrap">{defaultExpanded ? 'Colapsar todo' : 'Expandir todo'}</span>
       </div>
 
       {/* Versions List */}
