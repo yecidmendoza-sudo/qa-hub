@@ -1,0 +1,6 @@
+@import "tailwindcss";
+
+/* Opcional: si quieres algunas reglas globales básicas */
+body {
+  background-color: #f9fafb;
+}
