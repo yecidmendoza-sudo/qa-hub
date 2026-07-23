@@ -4,7 +4,7 @@ import { logAudit } from './auditService';
 export const fetchVersionsWithCycles = async (projectId: string) => {
   const { data, error } = await supabase
     .from('test_versions')
-    .select('*, cycles:test_cycles(*)')
+    .select('*, test_cycles(*)')
     .eq('project_id', projectId)
     .order('created_at', { ascending: false });
   if (error) throw error;
