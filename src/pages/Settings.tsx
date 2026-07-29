@@ -8,6 +8,7 @@ export default function Settings() {
   
   const [fields, setFields] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [fieldMsg, setFieldMsg] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
 
   // Cambio de password
   const [newPassword, setNewPassword] = useState('');
@@ -73,7 +74,11 @@ export default function Settings() {
 
   const handleAddField = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!targetProjectId || !newFieldName.trim()) return;
+    setFieldMsg(null);
+    if (!targetProjectId || !newFieldName.trim()) {
+      setFieldMsg({ type: 'error', text: 'Selecciona un proyecto y escribe un nombre de campo.' });
+      return;
+    }
 
     const optionsArray = newFieldType === 'DROPDOWN' 
       ? newFieldOptions.split(',').map(s => s.trim()).filter(s => s.length > 0)
@@ -91,17 +96,28 @@ export default function Settings() {
       .select('*, project:projects(name)')
       .single();
 
-    if (!error && data) {
+    if (error) {
+      console.error('Error adding field:', error);
+      setFieldMsg({ type: 'error', text: `Error al añadir campo: ${error.message || error.code || 'Permiso denegado (RLS). Verifica las políticas de la tabla cycle_field_configs en Supabase.'}` });
+      return;
+    }
+    if (data) {
       setFields([...fields, data]);
       setNewFieldName('');
       setNewFieldOptions('');
+      setFieldMsg({ type: 'ok', text: '✅ Campo añadido correctamente.' });
     }
   };
 
   const handleDeleteField = async (id: string, name: string) => {
     if (window.confirm(`¿Estás seguro de eliminar el campo '${name}'?`)) {
-      await supabase.from('cycle_field_configs').delete().eq('id', id);
+      const { error } = await supabase.from('cycle_field_configs').delete().eq('id', id);
+      if (error) {
+        setFieldMsg({ type: 'error', text: `Error al eliminar campo: ${error.message || 'Permiso denegado.'}` });
+        return;
+      }
       setFields(fields.filter(f => f.id !== id));
+      setFieldMsg({ type: 'ok', text: `✅ Campo '${name}' eliminado.` });
     }
   };
 
@@ -164,6 +180,10 @@ export default function Settings() {
               </div>
             )}
             
+            {fieldMsg && (
+              <p className={`text-sm font-medium ${fieldMsg.type === 'ok' ? 'text-green-600' : 'text-red-600'}`}>{fieldMsg.text}</p>
+            )}
+
             <div className="flex justify-end mt-2">
               <button type="submit" className="bg-blue-600 text-white px-6 py-2 rounded font-medium hover:bg-blue-700 flex items-center justify-center">
                 <Plus className="w-4 h-4 mr-1" /> Añadir Campo

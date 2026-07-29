@@ -137,8 +137,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
       .from("test_cycles")
       .insert({
         version_id: versionId,
+        project_id: project.id,
+        version: version,
         type: cycle_type,
         status: "IN_PROGRESS",
+        custom_values: {},
+        custom_columns: [],
       })
       .select("id")
       .single();
@@ -152,13 +156,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const cycleId: string = cycle.id;
 
     // ── 4. Insert test cases ──────────────────────────────────────────────
-    const casesToInsert = test_cases.map((tc, idx) => ({
+    const casesToInsert = test_cases.map((tc) => ({
       cycle_id: cycleId,
       ticket_id: tc.ticket_id,
+      module: tc.module ?? "",
       title: tc.title,
-      module: tc.module ?? null,
-      expected_result: tc.expected_result ?? null,
-      sort_order: idx + 1,
+      expected_result: tc.expected_result ?? "",
+      custom_data: {},
     }));
 
     const { data: insertedCases, error: casesError } = await supabase
@@ -175,7 +179,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // ── 5. Create initial executions ──────────────────────────────────────
     const executionsToInsert = insertedCases.map((c) => ({
       case_id: c.id,
-      cycle_id: cycleId,
       status: "PENDING",
     }));
 
