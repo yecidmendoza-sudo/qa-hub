@@ -78,7 +78,7 @@ type MatrixData = {
   stage: string;
   version_num: number;
   matrix_type: string;
-  created_by: string;
+  qa_email: string;
   created_at: string;
   content_md: string;
   fixtures_json?: any;
@@ -112,7 +112,7 @@ export default function MatrixPublicView() {
           return;
         }
         const data = await res.json();
-        setMatrix(data);
+        setMatrix(data.data);
       } catch {
         setNotFound(true);
       } finally {
@@ -201,7 +201,7 @@ export default function MatrixPublicView() {
           <div className="flex flex-wrap gap-6 text-sm text-gray-400">
             <div>
               <span className="font-semibold text-gray-500">Generado por:</span>{' '}
-              <span className="text-gray-300">{matrix.created_by}</span>
+              <span className="text-gray-300">{matrix.qa_email}</span>
             </div>
             <div>
               <span className="font-semibold text-gray-500">Fecha:</span>{' '}
