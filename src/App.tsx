@@ -8,6 +8,10 @@ import Matrix from './pages/Matrix';
 import Login from './pages/Login';
 import Projects from './pages/Projects';
 import Settings from './pages/Settings';
+import MatrixPublicView from './pages/MatrixPublicView';
+import MySpace from './pages/MySpace';
+import MySpaceDetail from './pages/MySpaceDetail';
+import AdminBoard from './pages/AdminBoard';
 
 const ProtectedRoute = ({ children }: { children: ReactElement }) => {
   const { session, loading } = useAuth();
@@ -22,13 +26,19 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
-      
+
+      {/* Public route — no login required */}
+      <Route path="/m/:uuid" element={<MatrixPublicView />} />
+
       <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route index element={<Dashboard />} />
         <Route path="projects" element={<Projects />} />
         <Route path="cycles" element={<Cycles />} />
         <Route path="cycles/:id" element={<Matrix />} />
         <Route path="settings" element={<Settings />} />
+        <Route path="my-space" element={<MySpace />} />
+        <Route path="my-space/:ticketId" element={<MySpaceDetail />} />
+        <Route path="admin/board" element={<AdminBoard />} />
       </Route>
     </Routes>
   );
