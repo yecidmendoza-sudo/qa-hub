@@ -52,16 +52,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   const { email, project_ids, role: rawRole } = payload;
-  const assignedRole = rawRole === "ADMIN" ? "ADMIN" : "QA";
+  const assignedRole = rawRole === "ADMIN" ? "ADMIN" : "QA_TESTER";
 
   // ── Field validation ────────────────────────────────────────────────────
   if (!email) {
     return jsonError("Missing required field: email", 400);
   }
   // project_ids requerido solo para usuarios QA
-  if (assignedRole === "QA") {
+  if (assignedRole === "QA_TESTER") {
     if (!project_ids || !Array.isArray(project_ids) || project_ids.length === 0) {
-      return jsonError("project_ids must be a non-empty array for QA users", 400);
+      return jsonError("project_ids must be a non-empty array for QA_TESTER users", 400);
     }
   }
 
@@ -144,7 +144,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     // ── 3. Assign projects (solo para QA) ───────────────────────────────
-    if (assignedRole === "QA" && project_ids && project_ids.length > 0) {
+    if (assignedRole === "QA_TESTER" && project_ids && project_ids.length > 0) {
       for (const projectId of project_ids) {
         const { error: projectAssignError } = await adminClient
           .from("user_projects")

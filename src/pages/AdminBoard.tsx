@@ -80,7 +80,7 @@ function QATeamSection() {
 
         const qaUsers = assignmentsData
           .map(a => ({ ...a, profile: getProfile(a) }))
-          .filter(a => a.profile?.role === 'QA');
+          .filter(a => a.profile?.role === 'QA_TESTER');
 
         // Get folder stats for this project
         const { data: folders } = await supabase
