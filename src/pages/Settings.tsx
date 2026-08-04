@@ -451,6 +451,19 @@ function CustomFieldsSection() {
   // Menú 3 puntos abierto
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
+  // Auto-scroll al formulario de edición cuando se abre
+  useEffect(() => {
+    if (editingFieldId) {
+      // Pequeño delay para que React haya renderizado el formulario
+      const timer = setTimeout(() => {
+        document
+          .getElementById(`edit-field-form-${editingFieldId}`)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 60);
+      return () => clearTimeout(timer);
+    }
+  }, [editingFieldId]);
+
   useEffect(() => {
     if (userProjects.length > 0) fetchFields();
     // Expandir el proyecto seleccionado por defecto
@@ -756,7 +769,11 @@ function CustomFieldsSection() {
 
                       if (isEditing) {
                         return (
-                          <div key={field.id} className="px-4 py-3 bg-yellow-50 border-b border-yellow-100">
+                          <div
+                            key={field.id}
+                            id={`edit-field-form-${field.id}`}
+                            className="px-4 py-3 bg-yellow-50 border-b border-yellow-100"
+                          >
                             <p className="text-xs font-bold text-yellow-700 mb-2">Editando: {field.name}</p>
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                               <div className="sm:col-span-1">
