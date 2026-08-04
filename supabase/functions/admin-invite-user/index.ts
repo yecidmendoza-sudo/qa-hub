@@ -67,10 +67,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
   if (action === 'create' && !email) {
     return jsonError("Missing required field: email", 400);
   }
-  // project_ids requerido solo para usuarios QA
-  if (action === 'create' && assignedRole === "QA_TESTER") {
+  // project_ids requerido para QA_TESTER y QA_LEAD
+  if (action === 'create' && ['QA_TESTER', 'QA_LEAD'].includes(assignedRole)) {
     if (!project_ids || !Array.isArray(project_ids) || project_ids.length === 0) {
-      return jsonError("project_ids must be a non-empty array for QA_TESTER users", 400);
+      return jsonError("project_ids must be a non-empty array for QA_TESTER and QA_LEAD users", 400);
     }
   }
 
@@ -186,8 +186,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
       throw new Error(`Profile upsert failed: ${profileError.message}`);
     }
 
-    // ── 3. Assign projects (solo para QA) ───────────────────────────────
-    if (assignedRole === "QA_TESTER" && project_ids && project_ids.length > 0) {
+    // ── 3. Assign projects (QA_TESTER y QA_LEAD) ────────────────────────
+    if (['QA_TESTER', 'QA_LEAD'].includes(assignedRole) && project_ids && project_ids.length > 0) {
       for (const projectId of project_ids) {
         const { error: projectAssignError } = await adminClient
           .from("user_projects")
