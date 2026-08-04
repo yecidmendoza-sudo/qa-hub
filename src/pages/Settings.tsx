@@ -454,12 +454,15 @@ function CustomFieldsSection() {
   // Auto-scroll al formulario de edición cuando se abre
   useEffect(() => {
     if (editingFieldId) {
-      // Pequeño delay para que React haya renderizado el formulario
       const timer = setTimeout(() => {
-        document
-          .getElementById(`edit-field-form-${editingFieldId}`)
-          ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      }, 60);
+        const el = document.getElementById(`edit-field-form-${editingFieldId}`);
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          const scrollTop = window.scrollY || document.documentElement.scrollTop;
+          // Scroll para que el formulario quede a 80px del tope de la ventana
+          window.scrollTo({ top: scrollTop + rect.top - 80, behavior: 'smooth' });
+        }
+      }, 80);
       return () => clearTimeout(timer);
     }
   }, [editingFieldId]);
@@ -614,8 +617,13 @@ function CustomFieldsSection() {
         return (
           <div
             key={project.id}
-            className={`border rounded-xl overflow-hidden transition-all duration-200 ${
+            className={`border rounded-xl transition-all duration-200 ${
               isExpanded ? 'border-blue-200 shadow-sm' : 'border-gray-200 hover:border-gray-300'
+            } ${
+              // Quitar overflow-hidden cuando un dropdown está abierto en este proyecto
+              // para que el menú no sea clipado por el borde de la tarjeta
+              openMenuId && projectFields.some((f: any) => f.id === openMenuId)
+                ? '' : 'overflow-hidden'
             }`}
           >
             {/* Header del proyecto */}
