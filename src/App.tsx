@@ -11,7 +11,7 @@ import Settings from './pages/Settings';
 import MatrixPublicView from './pages/MatrixPublicView';
 import MySpace from './pages/MySpace';
 import MySpaceDetail from './pages/MySpaceDetail';
-import AdminBoard from './pages/AdminBoard';
+
 import AcceptInvite from './pages/AcceptInvite';
 
 const ProtectedRoute = ({ children }: { children: ReactElement }) => {
@@ -40,7 +40,7 @@ function AppRoutes() {
         <Route path="settings" element={<Settings />} />
         <Route path="my-space" element={<MySpace />} />
         <Route path="my-space/:ticketId" element={<MySpaceDetail />} />
-        <Route path="admin/board" element={<AdminBoard />} />
+
       </Route>
     </Routes>
   );

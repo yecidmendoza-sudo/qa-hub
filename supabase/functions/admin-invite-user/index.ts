@@ -14,9 +14,17 @@ const CORS_HEADERS = {
 // ── Types ──────────────────────────────────────────────────────────────────
 
 interface InviteUserPayload {
+  action?: string;       // 'create' (default) | 'reset'
   email: string;
-  project_ids?: string[];   // requerido para QA, opcional para ADMIN
-  role?: string;            // 'QA' (default) | 'ADMIN'
+  project_ids?: string[]; // requerido para QA_TESTER en action=create
+  role?: string;          // 'QA_TESTER' (default) | 'ADMIN'
+  user_id?: string;       // requerido para action=reset
+}
+
+function generatePassword(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  const seg = () => Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  return `Qa-${seg()}-${seg()}`;
 }
 
 // ── Handler ────────────────────────────────────────────────────────────────
@@ -51,15 +59,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return jsonError("Invalid JSON body", 400);
   }
 
-  const { email, project_ids, role: rawRole } = payload;
+  const { action = 'create', email, project_ids, role: rawRole, user_id } = payload;
   const assignedRole = rawRole === "ADMIN" ? "ADMIN" : "QA_TESTER";
 
   // ── Field validation ────────────────────────────────────────────────────
-  if (!email) {
+  if (action === 'create' && !email) {
     return jsonError("Missing required field: email", 400);
   }
   // project_ids requerido solo para usuarios QA
-  if (assignedRole === "QA_TESTER") {
+  if (action === 'create' && assignedRole === "QA_TESTER") {
     if (!project_ids || !Array.isArray(project_ids) || project_ids.length === 0) {
       return jsonError("project_ids must be a non-empty array for QA_TESTER users", 400);
     }
@@ -67,8 +75,51 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   // Basic email format check
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email)) {
+  if (email && !emailRegex.test(email)) {
     return jsonError("Invalid email format", 400);
+  }
+
+  // ── Route by action ────────────────────────────────────────────────────────
+  if (action === 'reset') {
+    if (!user_id && !email) {
+      return jsonError('Missing user_id or email for reset action', 400);
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (!supabaseUrl || !serviceRoleKey) {
+      return jsonError('Server misconfiguration', 500);
+    }
+    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+    const newPassword = generatePassword();
+    let targetUserId = user_id;
+
+    if (!targetUserId && email) {
+      const { data: usersData } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
+      const found = usersData?.users.find(u => u.email?.toLowerCase() === email.toLowerCase());
+      if (!found) return jsonError(`User not found: ${email}`, 404);
+      targetUserId = found.id;
+    }
+
+    const { error: updateError } = await adminClient.auth.admin.updateUserById(
+      targetUserId!,
+      { password: newPassword }
+    );
+
+    if (updateError) {
+      return jsonError(`Password reset failed: ${updateError.message}`, 500);
+    }
+
+    return jsonResponse({
+      success: true,
+      action: 'reset',
+      email,
+      new_password: newPassword,
+      message: 'Password reset successfully. Share the new password with the user.',
+    });
   }
 
   // ── Supabase client (service role) ──────────────────────────────────────
@@ -84,51 +135,42 @@ Deno.serve(async (req: Request): Promise<Response> => {
   });
 
   try {
-    // ── 1. Invite user via Supabase Admin Auth ────────────────────────────
+    // ── 1. Create user with auto-generated password ───────────────────────────
+    const generatedPassword = generatePassword();
     let userId: string;
 
-    const { data: inviteData, error: inviteError } =
-      await adminClient.auth.admin.inviteUserByEmail(email, {
-        redirectTo: "https://qa-hub-qvnt-jade.vercel.app/#/accept-invite",
-      });
+    const { data: createData, error: createError } = await adminClient.auth.admin.createUser({
+      email,
+      password: generatedPassword,
+      email_confirm: true,
+    });
 
-    if (inviteError) {
+    if (createError) {
       // Graceful handling: if user already exists, look them up
       const alreadyExists =
-        inviteError.message?.toLowerCase().includes("already") ||
-        inviteError.message?.toLowerCase().includes("registered") ||
-        inviteError.message?.toLowerCase().includes("exists");
+        createError.message?.toLowerCase().includes('already') ||
+        createError.message?.toLowerCase().includes('registered') ||
+        createError.message?.toLowerCase().includes('exists');
 
       if (!alreadyExists) {
-        throw new Error(`Auth invite failed: ${inviteError.message}`);
+        throw new Error(`User creation failed: ${createError.message}`);
       }
 
-      // User already exists — find them by listing users and matching email
-      const { data: usersData, error: listError } =
-        await adminClient.auth.admin.listUsers({ perPage: 1000 });
-
+      // User already exists — find them
+      const { data: usersData, error: listError } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
       if (listError || !usersData) {
-        throw new Error(
-          `Failed to list users to resolve existing account: ${listError?.message ?? "no data"}`,
-        );
+        throw new Error(`Failed to list users: ${listError?.message ?? 'no data'}`);
       }
-
-      const existingUser = usersData.users.find(
-        (u) => u.email?.toLowerCase() === email.toLowerCase(),
-      );
-
+      const existingUser = usersData.users.find(u => u.email?.toLowerCase() === email.toLowerCase());
       if (!existingUser) {
-        throw new Error(
-          `User already exists but could not be found in user list: ${email}`,
-        );
+        throw new Error(`User already exists but could not be found: ${email}`);
       }
-
       userId = existingUser.id;
     } else {
-      if (!inviteData?.user?.id) {
-        throw new Error("Invite succeeded but no user id was returned");
+      if (!createData?.user?.id) {
+        throw new Error('User created but no user id returned');
       }
-      userId = inviteData.user.id;
+      userId = createData.user.id;
     }
 
     // ── 2. Upsert profile ─────────────────────────────────────────────────
@@ -165,13 +207,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // ── Response ──────────────────────────────────────────────────────────
     return jsonResponse({
       success: true,
+      action: 'create',
       user_id: userId,
       email,
       role: assignedRole,
+      generated_password: generatedPassword,
       message:
-        assignedRole === "ADMIN"
-          ? "Admin invitation sent. User will receive an email to set their password."
-          : "Invitation sent. QA will receive an email to set their password and access QA Hub.",
+        assignedRole === 'ADMIN'
+          ? 'Admin account created. Share the generated password with the user.'
+          : 'QA account created. Share the generated password with the user.',
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
