@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../lib/supabase/auth';
 import { supabase } from '../lib/supabase/client';
-import { Shield, Mail, User, ListPlus, Trash2, Plus, KeyRound, Eye, EyeOff, Users, ArrowLeft, Copy, Check } from 'lucide-react';
+import { Shield, Mail, User, ListPlus, Trash2, Plus, KeyRound, Eye, EyeOff, Users, ArrowLeft, Copy, Check, Pencil, MoreVertical, X } from 'lucide-react';
 
 function UserManagement() {
   const { userProjects } = useAuth();
@@ -394,6 +394,16 @@ function CustomFieldsSection() {
   const [newFieldOptions, setNewFieldOptions] = useState('');
   const [addLoading, setAddLoading] = useState(false);
 
+  // Estado de edición inline
+  const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editType, setEditType] = useState('TEXT');
+  const [editRequired, setEditRequired] = useState(false);
+  const [editOptions, setEditOptions] = useState('');
+  const [editLoading, setEditLoading] = useState(false);
+  // Menú 3 puntos abierto
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+
   useEffect(() => {
     if (userProjects.length > 0) fetchFields();
     // Expandir el proyecto seleccionado por defecto
@@ -471,6 +481,7 @@ function CustomFieldsSection() {
   };
 
   const handleDeleteField = async (id: string, name: string, projectId: string) => {
+    setOpenMenuId(null);
     if (!window.confirm(`¿Eliminar el campo '${name}'?`)) return;
     const { error } = await supabase.from('cycle_field_configs').delete().eq('id', id);
     if (error) {
@@ -478,6 +489,36 @@ function CustomFieldsSection() {
     } else {
       setFields(prev => prev.filter(f => f.id !== id));
     }
+  };
+
+  const openEditForm = (field: any) => {
+    setOpenMenuId(null);
+    setEditingFieldId(field.id);
+    setEditName(field.name);
+    setEditType(field.field_type);
+    setEditRequired(field.is_required);
+    setEditOptions((field.options || []).join(', '));
+  };
+
+  const handleSaveEdit = async (fieldId: string, projectId: string) => {
+    if (!editName.trim()) return;
+    setEditLoading(true);
+    const optionsArray = editType === 'DROPDOWN'
+      ? editOptions.split(',').map(s => s.trim()).filter(s => s.length > 0)
+      : [];
+    const { data, error } = await supabase
+      .from('cycle_field_configs')
+      .update({ name: editName.trim(), field_type: editType, is_required: editRequired, options: optionsArray })
+      .eq('id', fieldId)
+      .select('*, project:projects(name)')
+      .single();
+    if (!error && data) {
+      setFields(prev => prev.map(f => f.id === fieldId ? data : f));
+      setEditingFieldId(null);
+    } else {
+      setFieldMsg({ type: 'error', text: `Error al guardar: ${error?.message}`, projectId });
+    }
+    setEditLoading(false);
   };
 
   const fieldsByProject = userProjects.reduce((acc, project) => {
@@ -662,44 +703,120 @@ function CustomFieldsSection() {
                   </div>
                 ) : (
                   <div className="divide-y divide-gray-50">
-                    {projectFields.map((field: any) => (
-                      <div
-                        key={field.id}
-                        className="flex items-center justify-between px-4 py-3 bg-white hover:bg-gray-50 transition-colors group"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="flex-shrink-0">
-                            <span className={`inline-flex items-center text-xs px-2 py-0.5 rounded-full font-semibold ${
-                              field.field_type === 'DROPDOWN'
-                                ? 'bg-purple-100 text-purple-700'
-                                : 'bg-gray-100 text-gray-600'
-                            }`}>
-                              {field.field_type === 'DROPDOWN' ? '▾ Lista' : 'Aa Texto'}
-                            </span>
+                    {projectFields.map((field: any) => {
+                      const isEditing = editingFieldId === field.id;
+                      const menuOpen = openMenuId === field.id;
+
+                      if (isEditing) {
+                        return (
+                          <div key={field.id} className="px-4 py-3 bg-yellow-50 border-b border-yellow-100">
+                            <p className="text-xs font-bold text-yellow-700 mb-2">Editando: {field.name}</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                              <div className="sm:col-span-1">
+                                <label className="block text-xs font-semibold text-gray-600 mb-1">Nombre</label>
+                                <input
+                                  type="text" required autoFocus
+                                  value={editName} onChange={e => setEditName(e.target.value)}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 focus:outline-none"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-semibold text-gray-600 mb-1">Tipo</label>
+                                <select value={editType} onChange={e => setEditType(e.target.value)}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-yellow-400 focus:outline-none">
+                                  <option value="TEXT">Texto Corto</option>
+                                  <option value="DROPDOWN">Menú Desplegable</option>
+                                </select>
+                              </div>
+                              <div className="flex items-end pb-0.5">
+                                <label className="flex items-center text-sm cursor-pointer">
+                                  <input type="checkbox" checked={editRequired} onChange={e => setEditRequired(e.target.checked)}
+                                    className="mr-2 rounded text-yellow-500 focus:ring-yellow-400" />
+                                  <span className="text-xs font-semibold">¿Obligatorio?</span>
+                                </label>
+                              </div>
+                            </div>
+                            {editType === 'DROPDOWN' && (
+                              <div className="mt-2">
+                                <label className="block text-xs font-semibold text-gray-600 mb-1">Opciones (separadas por coma)</label>
+                                <input type="text" value={editOptions} onChange={e => setEditOptions(e.target.value)}
+                                  placeholder="QA, STG, PROD"
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 focus:outline-none" />
+                              </div>
+                            )}
+                            <div className="flex gap-2 justify-end mt-3">
+                              <button type="button" onClick={() => setEditingFieldId(null)}
+                                className="px-3 py-1.5 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-1">
+                                <X className="w-3 h-3" /> Cancelar
+                              </button>
+                              <button type="button" disabled={editLoading} onClick={() => handleSaveEdit(field.id, project.id)}
+                                className="px-4 py-1.5 bg-yellow-500 text-white text-sm font-semibold rounded-lg hover:bg-yellow-600 disabled:opacity-50 flex items-center gap-1">
+                                {editLoading ? 'Guardando...' : <><Check className="w-3.5 h-3.5" /> Guardar</>}
+                              </button>
+                            </div>
                           </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-semibold text-gray-800 truncate">{field.name}</span>
-                              {field.is_required && (
-                                <span className="text-xs text-red-500 font-bold flex-shrink-0">* Obligatorio</span>
+                        );
+                      }
+
+                      return (
+                        <div key={field.id}
+                          className="flex items-center justify-between px-4 py-3 bg-white hover:bg-gray-50 transition-colors group relative"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="flex-shrink-0">
+                              <span className={`inline-flex items-center text-xs px-2 py-0.5 rounded-full font-semibold ${
+                                field.field_type === 'DROPDOWN' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'
+                              }`}>
+                                {field.field_type === 'DROPDOWN' ? '▾ Lista' : 'Aa Texto'}
+                              </span>
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-semibold text-gray-800 truncate">{field.name}</span>
+                                {field.is_required && <span className="text-xs text-red-500 font-bold flex-shrink-0">* Obligatorio</span>}
+                              </div>
+                              {field.field_type === 'DROPDOWN' && field.options?.length > 0 && (
+                                <p className="text-xs text-gray-400 truncate mt-0.5">{field.options.join(' · ')}</p>
                               )}
                             </div>
-                            {field.field_type === 'DROPDOWN' && field.options?.length > 0 && (
-                              <p className="text-xs text-gray-400 truncate mt-0.5">
-                                {field.options.join(' · ')}
-                              </p>
+                          </div>
+
+                          {/* Menú 3 puntos */}
+                          <div className="relative flex-shrink-0 ml-2">
+                            <button
+                              onClick={() => setOpenMenuId(menuOpen ? null : field.id)}
+                              className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-all"
+                              title="Opciones"
+                            >
+                              <MoreVertical className="w-4 h-4" />
+                            </button>
+
+                            {menuOpen && (
+                              <>
+                                {/* Overlay para cerrar el menú */}
+                                <div className="fixed inset-0 z-10" onClick={() => setOpenMenuId(null)} />
+                                <div className="absolute right-0 top-8 z-20 bg-white border border-gray-200 rounded-xl shadow-lg py-1 w-36 overflow-hidden">
+                                  <button
+                                    onClick={() => openEditForm(field)}
+                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5 text-blue-500" />
+                                    Editar
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteField(field.id, field.name, project.id)}
+                                    className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                    Eliminar
+                                  </button>
+                                </div>
+                              </>
                             )}
                           </div>
                         </div>
-                        <button
-                          onClick={() => handleDeleteField(field.id, field.name, project.id)}
-                          className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 p-1.5 rounded-lg hover:bg-red-50 transition-all flex-shrink-0 ml-2"
-                          title="Eliminar campo"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
