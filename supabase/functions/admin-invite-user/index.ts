@@ -15,7 +15,8 @@ const CORS_HEADERS = {
 
 interface InviteUserPayload {
   email: string;
-  project_ids: string[];
+  project_ids?: string[];   // requerido para REGULAR, opcional para ADMIN
+  role?: string;            // 'REGULAR' (default) | 'ADMIN'
 }
 
 // ── Handler ────────────────────────────────────────────────────────────────
@@ -50,14 +51,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return jsonError("Invalid JSON body", 400);
   }
 
-  const { email, project_ids } = payload;
+  const { email, project_ids, role: rawRole } = payload;
+  const assignedRole = rawRole === "ADMIN" ? "ADMIN" : "REGULAR";
 
   // ── Field validation ────────────────────────────────────────────────────
-  if (!email || !project_ids) {
-    return jsonError("Missing required fields: email, project_ids", 400);
+  if (!email) {
+    return jsonError("Missing required field: email", 400);
   }
-  if (!Array.isArray(project_ids) || project_ids.length === 0) {
-    return jsonError("project_ids must be a non-empty array", 400);
+  // project_ids requerido solo para usuarios REGULAR
+  if (assignedRole === "REGULAR") {
+    if (!project_ids || !Array.isArray(project_ids) || project_ids.length === 0) {
+      return jsonError("project_ids must be a non-empty array for REGULAR users", 400);
+    }
   }
 
   // Basic email format check
@@ -83,7 +88,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
     let userId: string;
 
     const { data: inviteData, error: inviteError } =
-      await adminClient.auth.admin.inviteUserByEmail(email);
+      await adminClient.auth.admin.inviteUserByEmail(email, {
+        redirectTo: "https://qa-hub-qvnt-jade.vercel.app",
+      });
 
     if (inviteError) {
       // Graceful handling: if user already exists, look them up
@@ -128,7 +135,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const { error: profileError } = await adminClient
       .from("profiles")
       .upsert(
-        { id: userId, email, role: "REGULAR" },
+        { id: userId, email, role: assignedRole },
         { onConflict: "id" },
       );
 
@@ -136,21 +143,22 @@ Deno.serve(async (req: Request): Promise<Response> => {
       throw new Error(`Profile upsert failed: ${profileError.message}`);
     }
 
-    // ── 3. Assign projects ────────────────────────────────────────────────
-    for (const projectId of project_ids) {
-      const { error: projectAssignError } = await adminClient
-        .from("user_projects")
-        .upsert(
-          { user_id: userId, project_id: projectId },
-          { onConflict: "user_id,project_id" },
-        );
+    // ── 3. Assign projects (solo para REGULAR) ───────────────────────────
+    if (assignedRole === "REGULAR" && project_ids && project_ids.length > 0) {
+      for (const projectId of project_ids) {
+        const { error: projectAssignError } = await adminClient
+          .from("user_projects")
+          .upsert(
+            { user_id: userId, project_id: projectId },
+            { onConflict: "user_id,project_id" },
+          );
 
-      if (projectAssignError) {
-        // Log but don't fail the whole request over a single project assignment
-        console.warn(
-          `[admin-invite-user] Failed to assign project ${projectId} to ${userId}:`,
-          projectAssignError.message,
-        );
+        if (projectAssignError) {
+          console.warn(
+            `[admin-invite-user] Failed to assign project ${projectId} to ${userId}:`,
+            projectAssignError.message,
+          );
+        }
       }
     }
 
@@ -159,7 +167,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
       success: true,
       user_id: userId,
       email,
-      message: "Invitation sent. QA will receive an email to set their password.",
+      role: assignedRole,
+      message:
+        assignedRole === "ADMIN"
+          ? "Admin invitation sent. User will receive an email to set their password."
+          : "Invitation sent. QA will receive an email to set their password.",
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

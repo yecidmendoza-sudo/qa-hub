@@ -3,6 +3,71 @@ import { useAuth } from '../lib/supabase/auth';
 import { supabase } from '../lib/supabase/client';
 import { Shield, Mail, User, ListPlus, Trash2, Plus, KeyRound, Eye, EyeOff } from 'lucide-react';
 
+// ── AdminInviteForm — formulario para invitar nuevos Administradores ──────────
+
+function AdminInviteForm({ apiKey }: { apiKey: string }) {
+  const [email, setEmail] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setMsg(null);
+    if (!email.trim()) return;
+    setLoading(true);
+    try {
+      const res = await fetch(
+        'https://leexvmoadhzwthzcbhph.supabase.co/functions/v1/admin-invite-user',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
+          body: JSON.stringify({ email: email.trim(), role: 'ADMIN' }),
+        }
+      );
+      const data = await res.json();
+      if (data.success) {
+        setMsg({ type: 'ok', text: `✅ Invitación enviada a ${email}. Recibirá un email para configurar su contraseña.` });
+        setEmail('');
+      } else {
+        setMsg({ type: 'error', text: data.error || 'Error al enviar la invitación.' });
+      }
+    } catch {
+      setMsg({ type: 'error', text: 'Error de conexión. Intenta de nuevo.' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-3 max-w-sm">
+      <div className="flex gap-2">
+        <input
+          type="email"
+          required
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+          placeholder="admin@shipedge.com"
+          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:outline-none"
+        />
+        <button
+          type="submit"
+          disabled={loading}
+          className="px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors whitespace-nowrap"
+        >
+          {loading ? 'Enviando...' : 'Invitar Admin'}
+        </button>
+      </div>
+      {msg && (
+        <p className={`text-xs font-medium ${msg.type === 'ok' ? 'text-green-600' : 'text-red-600'}`}>
+          {msg.text}
+        </p>
+      )}
+    </form>
+  );
+}
+
+// ── Settings page ─────────────────────────────────────────────────────────────
+
 export default function Settings() {
   const { profile, selectedProject, userProjects } = useAuth();
   
@@ -281,25 +346,39 @@ export default function Settings() {
         </div>
       </div>
 
-      {/* Sección Administración de Usuarios (Restaurada) */}
       {profile?.role === 'ADMIN' && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-6">
-          <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+          <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex items-center">
+            <Shield className="w-5 h-5 mr-2 text-red-600" />
             <h2 className="text-sm font-medium text-gray-700">Administración de Usuarios</h2>
           </div>
-          <div className="p-6">
-            <p className="text-sm text-gray-600 mb-4">
-              Como administrador, puedes invitar nuevos QAs directamente desde el panel de <b>Supabase {'>'} Authentication</b>.
-              Una vez que acepten la invitación, aparecerán en la base de datos y podrás asignarles proyectos específicos en la tabla <code>user_projects</code>.
-            </p>
-            <a 
-              href="https://supabase.com/dashboard" 
-              target="_blank" 
-              rel="noreferrer"
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
-            >
-              Ir a Supabase Dashboard
-            </a>
+          <div className="p-6 space-y-6">
+
+            {/* QAs regulares → Admin Board */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-blue-800">Invitar QAs al equipo</p>
+                <p className="text-xs text-blue-600 mt-0.5">
+                  Gestiona QAs, asígnalos a proyectos y revisa su actividad de matrices.
+                </p>
+              </div>
+              <a
+                href="/#/admin/board"
+                className="inline-flex items-center px-4 py-2 text-sm font-semibold rounded-lg text-white bg-blue-600 hover:bg-blue-700 transition-colors whitespace-nowrap ml-4"
+              >
+                Ir al Admin Board →
+              </a>
+            </div>
+
+            {/* Invitar Admin */}
+            <div>
+              <p className="text-sm font-semibold text-gray-700 mb-1">Invitar nuevo Administrador</p>
+              <p className="text-xs text-gray-500 mb-4">
+                Los administradores tienen acceso total a todos los proyectos y configuraciones.
+              </p>
+              <AdminInviteForm apiKey={import.meta.env.VITE_AGENT_API_KEY} />
+            </div>
+
           </div>
         </div>
       )}
