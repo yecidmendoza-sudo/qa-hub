@@ -25,7 +25,7 @@ const CYCLE_STATUS_STYLES: Record<string, string> = {
 export default function Cycles() {
   const { selectedProject, profile } = useAuth();
   const navigate = useNavigate();
-  const isAdmin = profile?.role === 'ADMIN';
+  const canManage = ['ADMIN', 'QA_LEAD'].includes(profile?.role ?? '');
 
   // Data
   const [versions, setVersions] = useState<any[]>([]);
@@ -182,7 +182,7 @@ export default function Cycles() {
           <button onClick={openAudit} className="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-lg font-medium flex items-center hover:bg-gray-50 transition-colors text-sm">
             <History className="w-4 h-4 mr-1.5" /> Historial
           </button>
-          {isAdmin && (
+          {canManage && (
             <button onClick={() => setIsVersionModalOpen(true)} className="bg-blue-600 text-white px-3 py-2 rounded-lg font-medium flex items-center hover:bg-blue-700 transition-colors shadow-sm text-sm">
               <Plus className="w-4 h-4 mr-1" /> Nuevo Release
             </button>
@@ -256,7 +256,7 @@ export default function Cycles() {
                     </div>
                   </div>
                   <div className="flex items-center space-x-2">
-                    {isAdmin && (
+                    {canManage && (
                       <>
                         <button
                           onClick={e => { e.stopPropagation(); setCycleVersionId(version.id); setIsCycleModalOpen(true); }}
@@ -307,7 +307,7 @@ export default function Cycles() {
                             >
                               <ExternalLink className="w-3.5 h-3.5 mr-1" /> Abrir Matriz
                             </Link>
-                            {isAdmin && (
+                            {canManage && (
                               <button
                                 onClick={() => handleDeleteCycle(cycle.id, cycle.type)}
                                 className="text-gray-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-red-50 transition-colors"

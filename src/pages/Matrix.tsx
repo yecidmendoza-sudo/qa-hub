@@ -42,7 +42,7 @@ export default function Matrix() {
   const [loading, setLoading] = useState(true);
   const [isColModalOpen, setIsColModalOpen] = useState(false);
 
-  const isAdmin = profile?.role === 'ADMIN';
+  const canManage = ['ADMIN', 'QA_LEAD'].includes(profile?.role ?? '');
 
   const loadMatrix = async () => {
     if (!id) return;
@@ -123,7 +123,7 @@ export default function Matrix() {
             <p className="text-sm text-gray-500 truncate">{cycle.project?.name} — {cycle.version}</p>
           </div>
         </div>
-        {isAdmin && (
+        {canManage && (
           <div className="flex items-center gap-2 flex-wrap">
             <CsvImporter cycle={cycle} casesCount={cases.length} onImportDone={loadMatrix} />
             <button
@@ -163,7 +163,7 @@ export default function Matrix() {
                 <th key={col.id || col.name} className="px-4 py-3 text-xs font-bold text-indigo-900 uppercase min-w-[150px] bg-indigo-50 border-l border-indigo-100 group">
                   <div className="flex items-center justify-between">
                     <span>{col.name}</span>
-                    {isAdmin && (
+                    {canManage && (
                       <button
                         onClick={() => handleDeleteColumn(col.id || col.name)}
                         className="opacity-0 group-hover:opacity-100 text-indigo-300 hover:text-red-500 transition-opacity ml-2 p-1 rounded"
@@ -281,7 +281,7 @@ export default function Matrix() {
                           <option value="FAIL">FAIL</option>
                           <option value="BLOCKED">BLOCKED</option>
                         </select>
-                        {isAdmin && (
+                        {canManage && (
                           <button
                             onClick={() => handleDeleteRow(c.id)}
                             className="text-gray-400 hover:text-red-600 transition-colors p-1"

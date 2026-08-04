@@ -1,76 +1,68 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase/client';
 import { FolderKanban, Plus, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/supabase/auth';
+import { useState } from 'react';
+import { supabase } from '../lib/supabase/client';
 
 export default function Projects() {
-  const [projects, setProjects] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+  const { userProjects, setSelectedProject, profile } = useAuth();
+  const isAdmin = profile?.role === 'ADMIN';
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  const navigate = useNavigate();
-  const { setSelectedProject } = useAuth();
-
-  useEffect(() => {
-    fetchProjects();
-  }, []);
-
-  async function fetchProjects() {
-    setLoading(true);
-    const { data } = await supabase.from('projects').select('*').order('name');
-    if (data) setProjects(data);
-    setLoading(false);
+  function handleProjectClick(project: { id: string; name: string }) {
+    setSelectedProject(project);
+    navigate('/cycles');
   }
 
   async function handleCreateProject(e: React.FormEvent) {
     e.preventDefault();
     if (!newProjectName.trim()) return;
-
     setIsSaving(true);
     const { data, error } = await supabase
       .from('projects')
       .insert([{ name: newProjectName.trim() }])
       .select()
       .single();
-
     if (!error && data) {
-      setProjects([...projects, data].sort((a, b) => a.name.localeCompare(b.name)));
       setIsModalOpen(false);
       setNewProjectName('');
-      // Update global context so the user can immediately use it
-      // For a real app, you might also need to add it to 'user_projects' if RBAC is active
+      // Recargar la página para que AuthProvider re-fetch proyectos del admin
+      window.location.reload();
     }
     setIsSaving(false);
-  }
-
-  function handleProjectClick(project: any) {
-    setSelectedProject(project);
-    navigate('/cycles');
   }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Gestión de Proyectos</h1>
-        <button 
-          onClick={() => setIsModalOpen(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium flex items-center hover:bg-blue-700 transition-colors"
-        >
-          <Plus className="w-5 h-5 mr-2" />
-          Añadir Proyecto
-        </button>
+        <h1 className="text-2xl font-bold text-gray-900">
+          {isAdmin ? 'Gestión de Proyectos' : 'Mis Proyectos'}
+        </h1>
+        {/* Solo ADMIN puede crear proyectos */}
+        {isAdmin && (
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium flex items-center hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="w-5 h-5 mr-2" />
+            Añadir Proyecto
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {loading ? (
-          <div className="col-span-full p-8 text-center text-gray-500">Cargando proyectos...</div>
+        {userProjects.length === 0 ? (
+          <div className="col-span-full p-8 text-center text-gray-400">
+            No tienes proyectos asignados. Contacta a tu admin.
+          </div>
         ) : (
-          projects.map(project => (
-            <div 
-              key={project.id} 
+          userProjects.map(project => (
+            <div
+              key={project.id}
               onClick={() => handleProjectClick(project)}
               className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex items-center hover:shadow-md transition-shadow cursor-pointer hover:border-blue-300"
             >
@@ -86,7 +78,8 @@ export default function Projects() {
         )}
       </div>
 
-      {isModalOpen && (
+      {/* Modal crear proyecto — solo ADMIN */}
+      {isAdmin && isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
@@ -95,7 +88,6 @@ export default function Projects() {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
             <form onSubmit={handleCreateProject} className="p-6">
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -110,7 +102,6 @@ export default function Projects() {
                   placeholder="Ej. Xenvio WMS"
                 />
               </div>
-              
               <div className="flex justify-end gap-3 mt-6">
                 <button
                   type="button"
