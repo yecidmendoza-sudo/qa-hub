@@ -52,8 +52,8 @@ function UserManagement() {
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim()) return;
-    if (role === 'QA_TESTER' && selectedProjects.length === 0) {
-      setCreateMsg({ type: 'error', text: 'Selecciona al menos un proyecto para el QA' });
+    if (['QA_TESTER', 'QA_LEAD'].includes(role) && selectedProjects.length === 0) {
+      setCreateMsg({ type: 'error', text: 'Selecciona al menos un proyecto para este rol' });
       return;
     }
 
@@ -69,7 +69,7 @@ function UserManagement() {
             action: 'create',
             email: email.trim(),
             role,
-            project_ids: role === 'QA_TESTER' ? selectedProjects : undefined
+            project_ids: ['QA_TESTER', 'QA_LEAD'].includes(role) ? selectedProjects : undefined
           }),
         }
       );
@@ -166,11 +166,12 @@ function UserManagement() {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
               >
                 <option value="QA_TESTER">QA Tester</option>
+                <option value="QA_LEAD">QA Lead (Scrum Master)</option>
                 <option value="ADMIN">Admin</option>
               </select>
             </div>
 
-            {role === 'QA_TESTER' && (
+            {['QA_TESTER', 'QA_LEAD'].includes(role) && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Proyectos (selecciona al menos uno)</label>
                 <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-3">

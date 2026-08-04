@@ -60,7 +60,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   const { action = 'create', email, project_ids, role: rawRole, user_id } = payload;
-  const assignedRole = rawRole === "ADMIN" ? "ADMIN" : "QA_TESTER";
+  const VALID_ROLES = ['ADMIN', 'QA_LEAD', 'QA_TESTER'];
+  const assignedRole = VALID_ROLES.includes(rawRole ?? '') ? rawRole! : 'QA_TESTER';
 
   // ── Field validation ────────────────────────────────────────────────────
   if (action === 'create' && !email) {

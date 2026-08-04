@@ -87,7 +87,24 @@ Deno.serve(async (req: Request): Promise<Response> => {
   });
 
   try {
-    // ── 1. Find project (case-insensitive) ────────────────────────────────
+    // ── 0. Verify caller role (ADMIN or QA_LEAD only) ─────────────────────
+    const { data: callerProfile, error: roleError } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("email", created_by)
+      .maybeSingle();
+
+    if (roleError) throw new Error(`Role lookup failed: ${roleError.message}`);
+    if (!callerProfile) {
+      return jsonError(`User not found: ${created_by}`, 404);
+    }
+    if (!['ADMIN', 'QA_LEAD'].includes(callerProfile.role)) {
+      return jsonError(
+        `Permission denied: only ADMIN or QA_LEAD can create test cycles. Current role: ${callerProfile.role}`,
+        403
+      );
+    }
+
     const { data: projects, error: projectError } = await supabase
       .from("projects")
       .select("id, name")

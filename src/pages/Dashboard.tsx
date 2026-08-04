@@ -186,7 +186,7 @@ function QATeamSection() {
 
 export default function Dashboard() {
   const { selectedProject, profile } = useAuth();
-  const isAdmin = profile?.role === 'ADMIN';
+  const canSeeTeam = ['ADMIN', 'QA_LEAD'].includes(profile?.role ?? '');
 
   const [stats, setStats] = useState({
     projects: 0,
@@ -362,8 +362,8 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* QA Team Section — solo para admins */}
-      {isAdmin && <QATeamSection />}
+      {/* QA Team Section — para ADMIN y QA_LEAD */}
+      {canSeeTeam && <QATeamSection />}
     </div>
   );
 }
