@@ -26,30 +26,45 @@ function UserManagement() {
 
   const fetchUsers = async () => {
     setUsersLoading(true);
-    const { data } = await supabase
+
+    // 1. Todos los perfiles no-admin
+    const { data: profilesData } = await supabase
+      .from('profiles')
+      .select('id, email, role, active')
+      .neq('role', 'ADMIN')
+      .order('created_at', { ascending: false });
+
+    // 2. Asignaciones de proyectos
+    const { data: assignments } = await supabase
       .from('user_projects')
-      .select('user_id, project_id, profiles(email, role, active), projects(name)');
-    
-    if (data) {
-      const qas = data.filter((row: any) => row.profiles?.role !== 'ADMIN');
-      const grouped = qas.reduce((acc: any, row: any) => {
-        const pName = row.projects?.name || 'Desconocido';
-        if (!acc[pName]) acc[pName] = [];
-        const existingUser = acc[pName].find((u: any) => u.email === row.profiles?.email);
-        if (!existingUser) {
-          acc[pName].push({
-            id: row.user_id,
-            email: row.profiles?.email,
-            role: row.profiles?.role,
-            active: row.profiles?.active ?? true,
-          });
+      .select('user_id, projects(name)');
+
+    // 3. Mapa user_id → [proyecto1, proyecto2, ...]
+    const projectMap: Record<string, string[]> = {};
+    (assignments || []).forEach((a: any) => {
+      const pName = a.projects?.name;
+      if (!pName) return;
+      if (!projectMap[a.user_id]) projectMap[a.user_id] = [];
+      if (!projectMap[a.user_id].includes(pName)) projectMap[a.user_id].push(pName);
+    });
+
+    // 4. Agrupar por proyecto (usuarios sin proyecto → "Sin Proyecto Asignado")
+    const grouped: Record<string, any[]> = {};
+    (profilesData || []).forEach(p => {
+      const projects = projectMap[p.id] || [];
+      const targets = projects.length > 0 ? projects : ['Sin Proyecto Asignado'];
+      targets.forEach(proj => {
+        if (!grouped[proj]) grouped[proj] = [];
+        if (!grouped[proj].find((u: any) => u.id === p.id)) {
+          grouped[proj].push({ id: p.id, email: p.email, role: p.role, active: p.active ?? true });
         }
-        return acc;
-      }, {});
-      setUsers(grouped);
-    }
+      });
+    });
+
+    setUsers(grouped);
     setUsersLoading(false);
   };
+
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
