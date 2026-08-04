@@ -89,7 +89,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     const { data: inviteData, error: inviteError } =
       await adminClient.auth.admin.inviteUserByEmail(email, {
-        redirectTo: "https://qa-hub-qvnt-jade.vercel.app",
+        redirectTo: "https://qa-hub-qvnt-jade.vercel.app/#/accept-invite",
       });
 
     if (inviteError) {
