@@ -96,6 +96,20 @@ Deno.serve(async (req: Request): Promise<Response> => {
   });
 
   try {
+    // ── 0. Verify reporter identity ──────────────────────────────────────
+    const { data: reporterProfile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("email", reported_by.toLowerCase().trim())
+      .maybeSingle();
+
+    if (!reporterProfile) {
+      return jsonError(
+        `El email "${reported_by}" no está registrado en QA Hub. Contacta a tu admin para que cree tu cuenta.`,
+        403,
+      );
+    }
+
     // ── Verify cycle exists and fetch project_id via version ──────────────
     const { data: cycle, error: cycleError } = await supabase
       .from("test_cycles")

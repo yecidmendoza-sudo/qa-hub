@@ -107,6 +107,20 @@ Deno.serve(async (req: Request): Promise<Response> => {
   });
 
   try {
+    // ── 0. Verify QA identity ─────────────────────────────────────────────
+    const { data: qaProfile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("email", qa_email.toLowerCase().trim())
+      .maybeSingle();
+
+    if (!qaProfile) {
+      return jsonError(
+        `El email "${qa_email}" no está registrado en QA Hub. Contacta a tu admin para que cree tu cuenta.`,
+        403,
+      );
+    }
+
     // ── 1. Find project (case-insensitive) ────────────────────────────────
     const { data: project, error: projectError } = await supabase
       .from("projects")
