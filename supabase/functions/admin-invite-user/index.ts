@@ -15,8 +15,8 @@ const CORS_HEADERS = {
 
 interface InviteUserPayload {
   email: string;
-  project_ids?: string[];   // requerido para REGULAR, opcional para ADMIN
-  role?: string;            // 'REGULAR' (default) | 'ADMIN'
+  project_ids?: string[];   // requerido para QA, opcional para ADMIN
+  role?: string;            // 'QA' (default) | 'ADMIN'
 }
 
 // ── Handler ────────────────────────────────────────────────────────────────
@@ -52,16 +52,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   const { email, project_ids, role: rawRole } = payload;
-  const assignedRole = rawRole === "ADMIN" ? "ADMIN" : "REGULAR";
+  const assignedRole = rawRole === "ADMIN" ? "ADMIN" : "QA";
 
   // ── Field validation ────────────────────────────────────────────────────
   if (!email) {
     return jsonError("Missing required field: email", 400);
   }
-  // project_ids requerido solo para usuarios REGULAR
-  if (assignedRole === "REGULAR") {
+  // project_ids requerido solo para usuarios QA
+  if (assignedRole === "QA") {
     if (!project_ids || !Array.isArray(project_ids) || project_ids.length === 0) {
-      return jsonError("project_ids must be a non-empty array for REGULAR users", 400);
+      return jsonError("project_ids must be a non-empty array for QA users", 400);
     }
   }
 
@@ -143,8 +143,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
       throw new Error(`Profile upsert failed: ${profileError.message}`);
     }
 
-    // ── 3. Assign projects (solo para REGULAR) ───────────────────────────
-    if (assignedRole === "REGULAR" && project_ids && project_ids.length > 0) {
+    // ── 3. Assign projects (solo para QA) ───────────────────────────────
+    if (assignedRole === "QA" && project_ids && project_ids.length > 0) {
       for (const projectId of project_ids) {
         const { error: projectAssignError } = await adminClient
           .from("user_projects")
@@ -171,7 +171,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       message:
         assignedRole === "ADMIN"
           ? "Admin invitation sent. User will receive an email to set their password."
-          : "Invitation sent. QA will receive an email to set their password.",
+          : "Invitation sent. QA will receive an email to set their password and access QA Hub.",
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
