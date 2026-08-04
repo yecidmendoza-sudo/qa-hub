@@ -13,7 +13,7 @@ function UserManagement() {
   const [createLoading, setCreateLoading] = useState(false);
   const [copiedCreate, setCopiedCreate] = useState(false);
 
-  const [users, setUsers] = useState<any[]>([]);
+  const [users, setUsers] = useState<Record<string, any[]>>({});
   const [usersLoading, setUsersLoading] = useState(false);
   const [resetMsg, setResetMsg] = useState<{ type: 'ok' | 'error'; text: string; password?: string; userId?: string } | null>(null);
   const [resetLoadingId, setResetLoadingId] = useState<string | null>(null);
