@@ -110,13 +110,19 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // ── 0. Verify QA identity ─────────────────────────────────────────────
     const { data: qaProfile } = await supabase
       .from("profiles")
-      .select("role")
+      .select("role, active")
       .eq("email", qa_email.toLowerCase().trim())
       .maybeSingle();
 
     if (!qaProfile) {
       return jsonError(
         `El email "${qa_email}" no está registrado en QA Hub. Contacta a tu admin para que cree tu cuenta.`,
+        403,
+      );
+    }
+    if (qaProfile.active === false) {
+      return jsonError(
+        `La cuenta "${qa_email}" está desactivada. Contacta a tu admin para reactivarla.`,
         403,
       );
     }

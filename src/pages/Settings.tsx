@@ -17,6 +17,7 @@ function UserManagement() {
   const [usersLoading, setUsersLoading] = useState(false);
   const [resetMsg, setResetMsg] = useState<{ type: 'ok' | 'error'; text: string; password?: string; userId?: string } | null>(null);
   const [resetLoadingId, setResetLoadingId] = useState<string | null>(null);
+  const [toggleLoadingId, setToggleLoadingId] = useState<string | null>(null);
   const [copiedReset, setCopiedReset] = useState(false);
 
   useEffect(() => {
@@ -27,11 +28,10 @@ function UserManagement() {
     setUsersLoading(true);
     const { data } = await supabase
       .from('user_projects')
-      .select('user_id, project_id, profiles(email, role), projects(name)');
+      .select('user_id, project_id, profiles(email, role, active), projects(name)');
     
     if (data) {
       const qas = data.filter((row: any) => row.profiles?.role !== 'ADMIN');
-      
       const grouped = qas.reduce((acc: any, row: any) => {
         const pName = row.projects?.name || 'Desconocido';
         if (!acc[pName]) acc[pName] = [];
@@ -39,7 +39,9 @@ function UserManagement() {
         if (!existingUser) {
           acc[pName].push({
             id: row.user_id,
-            email: row.profiles?.email
+            email: row.profiles?.email,
+            role: row.profiles?.role,
+            active: row.profiles?.active ?? true,
           });
         }
         return acc;
@@ -116,6 +118,16 @@ function UserManagement() {
     } finally {
       setResetLoadingId(null);
     }
+  };
+
+  const handleToggleActive = async (userId: string, currentActive: boolean) => {
+    setToggleLoadingId(userId);
+    const { error } = await supabase
+      .from('profiles')
+      .update({ active: !currentActive })
+      .eq('id', userId);
+    if (!error) fetchUsers();
+    setToggleLoadingId(null);
   };
 
   const copyToClipboard = (text: string, type: 'create' | 'reset') => {
@@ -246,21 +258,40 @@ function UserManagement() {
                   </div>
                   <div className="divide-y divide-gray-100">
                     {qas.map((qa: any) => (
-                      <div key={qa.id} className="p-4 bg-white hover:bg-gray-50 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <span className="text-sm font-medium text-gray-800">{qa.email}</span>
-                        
+                      <div key={qa.id} className={`p-4 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${qa.active ? 'bg-white hover:bg-gray-50' : 'bg-red-50 opacity-75'}`}>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-medium text-gray-800">{qa.email}</span>
+                          {qa.role && (
+                            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium">{qa.role.replace('_', ' ')}</span>
+                          )}
+                          {!qa.active && (
+                            <span className="text-xs bg-red-100 text-red-700 border border-red-200 px-2 py-0.5 rounded-full font-semibold">Inactivo</span>
+                          )}
+                        </div>
                         <div className="flex flex-col items-end gap-2">
-                          <button
-                            onClick={() => handleResetPassword(qa.email, qa.id)}
-                            disabled={resetLoadingId === qa.id}
-                            className="text-xs px-3 py-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300 rounded font-medium disabled:opacity-50 flex items-center"
-                          >
-                            <KeyRound className="w-3 h-3 mr-1" />
-                            {resetLoadingId === qa.id ? 'Resetting...' : 'Reset Password'}
-                          </button>
-                          
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleToggleActive(qa.id, qa.active)}
+                              disabled={toggleLoadingId === qa.id}
+                              className={`text-xs px-3 py-1.5 border rounded font-medium disabled:opacity-50 transition-colors flex items-center ${
+                                qa.active
+                                  ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
+                                  : 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+                              }`}
+                            >
+                              {toggleLoadingId === qa.id ? '...' : qa.active ? 'Desactivar' : 'Activar'}
+                            </button>
+                            <button
+                              onClick={() => handleResetPassword(qa.email, qa.id)}
+                              disabled={resetLoadingId === qa.id || !qa.active}
+                              className="text-xs px-3 py-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300 rounded font-medium disabled:opacity-50 flex items-center transition-colors"
+                            >
+                              <KeyRound className="w-3 h-3 mr-1" />
+                              {resetLoadingId === qa.id ? 'Resetting...' : 'Reset Password'}
+                            </button>
+                          </div>
                           {resetMsg && resetMsg.userId === qa.id && (
-                            <div className={`mt-2 text-xs p-2 rounded ${resetMsg.type === 'ok' ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'} w-full sm:w-auto`}>
+                            <div className={`text-xs p-2 rounded ${resetMsg.type === 'ok' ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'} w-full sm:w-auto`}>
                               <span className="font-bold">{resetMsg.text}</span>
                               {resetMsg.password && (
                                 <div className="mt-1 flex items-center bg-white border border-green-300 rounded overflow-hidden">
@@ -276,6 +307,7 @@ function UserManagement() {
                             </div>
                           )}
                         </div>
+
                       </div>
                     ))}
                   </div>

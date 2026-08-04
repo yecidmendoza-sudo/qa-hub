@@ -66,8 +66,17 @@ Deno.serve(async (req: Request): Promise<Response> => {
       return jsonResponse({
         success: false,
         exists: false,
-        error: `El email "${qa_email}" no está registrado en QA Hub. Pídele al admin que te cree una cuenta primero.`,
+        error: `El email "${qa_email}" no está registrado en QA Hub. Pídele al admin que cree tu cuenta primero.`,
       }, 404);
+    }
+
+    if (profile.active === false) {
+      return jsonResponse({
+        success: false,
+        exists: true,
+        active: false,
+        error: `La cuenta "${qa_email}" está desactivada. Contacta a tu admin para reactivarla.`,
+      }, 403);
     }
 
     const role = profile.role as string;
