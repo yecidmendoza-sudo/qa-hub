@@ -380,57 +380,76 @@ function CustomFieldsSection() {
   
   const [fields, setFields] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [fieldMsg, setFieldMsg] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
-  
-  const [targetProjectId, setTargetProjectId] = useState('');
+  const [fieldMsg, setFieldMsg] = useState<{ type: 'ok' | 'error'; text: string; projectId?: string } | null>(null);
+
+  // Acordeones: qué proyectos están expandidos
+  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
+  // Formulario activo: qué proyecto tiene abierto el form de agregar campo
+  const [addingToProject, setAddingToProject] = useState<string | null>(null);
+
+  // Estado del formulario de nuevo campo
   const [newFieldName, setNewFieldName] = useState('');
   const [newFieldType, setNewFieldType] = useState('TEXT');
   const [newFieldRequired, setNewFieldRequired] = useState(false);
   const [newFieldOptions, setNewFieldOptions] = useState('');
+  const [addLoading, setAddLoading] = useState(false);
 
   useEffect(() => {
-    if (selectedProject && !targetProjectId) {
-      setTargetProjectId(selectedProject.id);
-    }
-    if (userProjects.length > 0) {
-      fetchFields();
-    }
-  }, [selectedProject, userProjects]);
+    if (userProjects.length > 0) fetchFields();
+    // Expandir el proyecto seleccionado por defecto
+    if (selectedProject) setExpandedProjects(new Set([selectedProject.id]));
+  }, [userProjects, selectedProject]);
 
   const fetchFields = async () => {
     setLoading(true);
     const projectIds = userProjects.map(p => p.id);
-    if (projectIds.length === 0) {
-      setLoading(false);
-      return;
-    }
-    
     const { data } = await supabase
       .from('cycle_field_configs')
       .select('*, project:projects(name)')
       .in('project_id', projectIds)
       .order('created_at', { ascending: true });
-      
     setFields(data || []);
     setLoading(false);
   };
 
-  const handleAddField = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setFieldMsg(null);
-    if (!targetProjectId || !newFieldName.trim()) {
-      setFieldMsg({ type: 'error', text: 'Selecciona un proyecto y escribe un nombre de campo.' });
-      return;
-    }
+  const toggleProject = (projectId: string) => {
+    setExpandedProjects(prev => {
+      const next = new Set(prev);
+      if (next.has(projectId)) {
+        next.delete(projectId);
+        if (addingToProject === projectId) setAddingToProject(null);
+      } else {
+        next.add(projectId);
+      }
+      return next;
+    });
+  };
 
-    const optionsArray = newFieldType === 'DROPDOWN' 
+  const openAddForm = (projectId: string) => {
+    // Asegura que el proyecto esté expandido
+    setExpandedProjects(prev => new Set([...prev, projectId]));
+    setAddingToProject(projectId);
+    setNewFieldName('');
+    setNewFieldType('TEXT');
+    setNewFieldRequired(false);
+    setNewFieldOptions('');
+    setFieldMsg(null);
+  };
+
+  const handleAddField = async (e: React.FormEvent, projectId: string) => {
+    e.preventDefault();
+    if (!newFieldName.trim()) return;
+    setAddLoading(true);
+    setFieldMsg(null);
+
+    const optionsArray = newFieldType === 'DROPDOWN'
       ? newFieldOptions.split(',').map(s => s.trim()).filter(s => s.length > 0)
       : [];
 
     const { data, error } = await supabase
       .from('cycle_field_configs')
       .insert({
-        project_id: targetProjectId,
+        project_id: projectId,
         name: newFieldName.trim(),
         field_type: newFieldType,
         is_required: newFieldRequired,
@@ -440,117 +459,254 @@ function CustomFieldsSection() {
       .single();
 
     if (error) {
-      setFieldMsg({ type: 'error', text: `Error al añadir campo: ${error.message || 'Permiso denegado.'}` });
-      return;
-    }
-    if (data) {
-      setFields([...fields, data]);
+      setFieldMsg({ type: 'error', text: `Error: ${error.message || 'Permiso denegado.'}`, projectId });
+    } else if (data) {
+      setFields(prev => [...prev, data]);
+      setFieldMsg({ type: 'ok', text: '✅ Campo añadido.', projectId });
       setNewFieldName('');
       setNewFieldOptions('');
-      setFieldMsg({ type: 'ok', text: '✅ Campo añadido correctamente.' });
+      setAddingToProject(null);
+    }
+    setAddLoading(false);
+  };
+
+  const handleDeleteField = async (id: string, name: string, projectId: string) => {
+    if (!window.confirm(`¿Eliminar el campo '${name}'?`)) return;
+    const { error } = await supabase.from('cycle_field_configs').delete().eq('id', id);
+    if (error) {
+      setFieldMsg({ type: 'error', text: `Error al eliminar: ${error.message}`, projectId });
+    } else {
+      setFields(prev => prev.filter(f => f.id !== id));
     }
   };
 
-  const handleDeleteField = async (id: string, name: string) => {
-    if (window.confirm(`¿Estás seguro de eliminar el campo '${name}'?`)) {
-      const { error } = await supabase.from('cycle_field_configs').delete().eq('id', id);
-      if (error) {
-        setFieldMsg({ type: 'error', text: `Error al eliminar campo: ${error.message || 'Permiso denegado.'}` });
-        return;
-      }
-      setFields(fields.filter(f => f.id !== id));
-      setFieldMsg({ type: 'ok', text: `✅ Campo '${name}' eliminado.` });
-    }
-  };
-
-  const groupedFields = fields.reduce((acc, field) => {
-    const pName = field.project?.name || 'Proyecto Desconocido';
-    if (!acc[pName]) acc[pName] = [];
-    acc[pName].push(field);
+  const fieldsByProject = userProjects.reduce((acc, project) => {
+    acc[project.id] = fields.filter(f => f.project_id === project.id);
     return acc;
   }, {} as Record<string, any[]>);
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mr-3" />
+        <span className="text-sm text-gray-500">Cargando campos...</span>
+      </div>
+    );
+  }
+
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-      <div className="p-6">
-        <p className="text-sm text-gray-500 mb-6">
-          Define qué preguntas (obligatorias u opcionales) se le harán a los QA al crear un nuevo Ciclo en cada proyecto.
-        </p>
+    <div className="space-y-3">
+      <p className="text-sm text-gray-500 mb-4">
+        Define qué preguntas aparecerán al crear un nuevo Ciclo. Expande un proyecto para ver o agregar campos.
+      </p>
 
-        <form onSubmit={handleAddField} className="flex flex-col gap-4 bg-gray-50 p-4 rounded-lg border border-gray-200 mb-8">
-          <div className="flex flex-wrap items-end gap-4">
-            <div className="w-full md:w-1/4">
-              <label className="block text-xs font-bold text-gray-700 mb-1">Proyecto Destino</label>
-              <select value={targetProjectId} onChange={e => setTargetProjectId(e.target.value)} className="w-full p-2 border border-gray-300 rounded text-sm bg-white">
-                {userProjects.map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-            </div>
-            <div className="w-full md:w-1/4">
-              <label className="block text-xs font-bold text-gray-700 mb-1">Nombre del Campo</label>
-              <input type="text" required value={newFieldName} onChange={e => setNewFieldName(e.target.value)} placeholder="Ej: Ticket Jira" className="w-full p-2 border border-gray-300 rounded text-sm" />
-            </div>
-            <div className="w-full md:w-1/5">
-              <label className="block text-xs font-bold text-gray-700 mb-1">Tipo</label>
-              <select value={newFieldType} onChange={e => setNewFieldType(e.target.value)} className="w-full p-2 border border-gray-300 rounded text-sm bg-white">
-                <option value="TEXT">Texto Corto</option>
-                <option value="DROPDOWN">Menú Desplegable</option>
-              </select>
-            </div>
-            <div className="w-full md:w-auto flex items-center mb-2">
-              <label className="flex items-center text-sm text-gray-700 cursor-pointer font-medium">
-                <input type="checkbox" checked={newFieldRequired} onChange={e => setNewFieldRequired(e.target.checked)} className="mr-2 rounded text-blue-600 focus:ring-blue-500" />
-                ¿Obligatorio?
-              </label>
-            </div>
-          </div>
+      {userProjects.length === 0 && (
+        <p className="text-sm text-gray-400 italic">No tienes proyectos asignados.</p>
+      )}
 
-          {newFieldType === 'DROPDOWN' && (
-            <div className="w-full">
-              <label className="block text-xs font-bold text-gray-700 mb-1">Opciones (separadas por coma)</label>
-              <input type="text" required value={newFieldOptions} onChange={e => setNewFieldOptions(e.target.value)} placeholder="QA, STG, PROD" className="w-full p-2 border border-gray-300 rounded text-sm" />
-            </div>
-          )}
-          
-          {fieldMsg && (
-            <p className={`text-sm font-medium ${fieldMsg.type === 'ok' ? 'text-green-600' : 'text-red-600'}`}>{fieldMsg.text}</p>
-          )}
+      {userProjects.map(project => {
+        const projectFields = fieldsByProject[project.id] || [];
+        const isExpanded = expandedProjects.has(project.id);
+        const isAddingHere = addingToProject === project.id;
+        const hasMsg = fieldMsg?.projectId === project.id;
 
-          <div className="flex justify-end mt-2">
-            <button type="submit" className="bg-blue-600 text-white px-6 py-2 rounded font-medium hover:bg-blue-700 flex items-center justify-center">
-              <Plus className="w-4 h-4 mr-1" /> Añadir Campo
-            </button>
-          </div>
-        </form>
-
-        <div className="space-y-6">
-          {loading ? <p className="text-sm text-gray-500">Cargando campos...</p> : fields.length === 0 ? <p className="text-sm text-gray-500">No hay campos personalizados en ningún proyecto.</p> : null}
-          
-          {Object.entries(groupedFields).map(([projectName, projectFields]) => (
-            <div key={projectName} className="border border-gray-200 rounded-lg overflow-hidden">
-              <div className="bg-gray-100 px-4 py-2 border-b border-gray-200">
-                <h3 className="font-bold text-gray-800 text-sm">Proyecto: {projectName}</h3>
+        return (
+          <div
+            key={project.id}
+            className={`border rounded-xl overflow-hidden transition-all duration-200 ${
+              isExpanded ? 'border-blue-200 shadow-sm' : 'border-gray-200 hover:border-gray-300'
+            }`}
+          >
+            {/* Header del proyecto */}
+            <div
+              className={`flex items-center justify-between px-4 py-3 cursor-pointer select-none transition-colors ${
+                isExpanded ? 'bg-blue-50' : 'bg-white hover:bg-gray-50'
+              }`}
+              onClick={() => toggleProject(project.id)}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors ${
+                  isExpanded ? 'bg-blue-100' : 'bg-gray-100'
+                }`}>
+                  <ListPlus className={`w-4 h-4 ${ isExpanded ? 'text-blue-600' : 'text-gray-500'}`} />
+                </div>
+                <div>
+                  <p className={`text-sm font-bold ${ isExpanded ? 'text-blue-800' : 'text-gray-800'}`}>
+                    {project.name}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    {projectFields.length === 0
+                      ? 'Sin campos personalizados'
+                      : `${projectFields.length} campo${projectFields.length !== 1 ? 's' : ''}`}
+                  </p>
+                </div>
               </div>
-              <div className="divide-y divide-gray-100">
-                {(projectFields as any[]).map((field: any) => (
-                  <div key={field.id} className="flex items-center justify-between p-4 bg-white hover:bg-gray-50 transition-colors">
-                    <div>
-                      <span className="font-bold text-gray-800 text-sm">{field.name}</span>
-                      <span className="ml-3 text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded border border-gray-200">{field.field_type}</span>
-                      {field.is_required && <span className="ml-2 text-xs text-red-600 font-bold">* Obligatorio</span>}
-                      {field.field_type === 'DROPDOWN' && <p className="text-xs text-gray-500 mt-1">Opciones: {(field.options || []).join(', ')}</p>}
-                    </div>
-                    <button onClick={() => handleDeleteField(field.id, field.name)} className="text-gray-400 hover:text-red-500 p-2" title="Eliminar campo">
-                      <Trash2 className="w-4 h-4" />
+
+              <div className="flex items-center gap-2">
+                {isExpanded && (
+                  <button
+                    onClick={e => { e.stopPropagation(); openAddForm(project.id); }}
+                    className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center gap-1"
+                    title="Agregar campo"
+                  >
+                    <Plus className="w-3 h-3" />
+                    Agregar
+                  </button>
+                )}
+                <div className={`transition-transform duration-200 ${ isExpanded ? 'rotate-180' : ''}`}>
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            {/* Contenido expandido */}
+            {isExpanded && (
+              <div className="border-t border-gray-100">
+
+                {/* Formulario de agregar campo (aparece al hacer clic en Agregar) */}
+                {isAddingHere && (
+                  <div className="p-4 bg-blue-50 border-b border-blue-100">
+                    <form onSubmit={e => handleAddField(e, project.id)} className="space-y-3">
+                      <p className="text-xs font-bold text-blue-700 mb-2">Nuevo campo para {project.name}</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="sm:col-span-1">
+                          <label className="block text-xs font-semibold text-gray-600 mb-1">Nombre del campo</label>
+                          <input
+                            type="text"
+                            required
+                            autoFocus
+                            value={newFieldName}
+                            onChange={e => setNewFieldName(e.target.value)}
+                            placeholder="Ej: Ticket Jira"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-600 mb-1">Tipo</label>
+                          <select
+                            value={newFieldType}
+                            onChange={e => setNewFieldType(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                          >
+                            <option value="TEXT">Texto Corto</option>
+                            <option value="DROPDOWN">Menú Desplegable</option>
+                          </select>
+                        </div>
+                        <div className="flex items-end pb-0.5">
+                          <label className="flex items-center text-sm text-gray-700 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={newFieldRequired}
+                              onChange={e => setNewFieldRequired(e.target.checked)}
+                              className="mr-2 rounded text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="text-xs font-semibold">¿Obligatorio?</span>
+                          </label>
+                        </div>
+                      </div>
+
+                      {newFieldType === 'DROPDOWN' && (
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-600 mb-1">Opciones (separadas por coma)</label>
+                          <input
+                            type="text"
+                            required
+                            value={newFieldOptions}
+                            onChange={e => setNewFieldOptions(e.target.value)}
+                            placeholder="QA, STG, PROD"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                          />
+                        </div>
+                      )}
+
+                      {hasMsg && (
+                        <p className={`text-xs font-medium ${fieldMsg!.type === 'ok' ? 'text-green-600' : 'text-red-600'}`}>
+                          {fieldMsg!.text}
+                        </p>
+                      )}
+
+                      <div className="flex gap-2 justify-end">
+                        <button
+                          type="button"
+                          onClick={() => setAddingToProject(null)}
+                          className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={addLoading}
+                          className="px-4 py-1.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center gap-1"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          {addLoading ? 'Guardando...' : 'Añadir campo'}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+
+                {/* Lista de campos */}
+                {projectFields.length === 0 && !isAddingHere ? (
+                  <div className="px-4 py-6 text-center">
+                    <ListPlus className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                    <p className="text-sm text-gray-400">Sin campos personalizados</p>
+                    <button
+                      onClick={() => openAddForm(project.id)}
+                      className="mt-2 text-sm text-blue-600 hover:text-blue-700 font-semibold"
+                    >
+                      + Agregar el primero
                     </button>
                   </div>
-                ))}
+                ) : (
+                  <div className="divide-y divide-gray-50">
+                    {projectFields.map((field: any) => (
+                      <div
+                        key={field.id}
+                        className="flex items-center justify-between px-4 py-3 bg-white hover:bg-gray-50 transition-colors group"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="flex-shrink-0">
+                            <span className={`inline-flex items-center text-xs px-2 py-0.5 rounded-full font-semibold ${
+                              field.field_type === 'DROPDOWN'
+                                ? 'bg-purple-100 text-purple-700'
+                                : 'bg-gray-100 text-gray-600'
+                            }`}>
+                              {field.field_type === 'DROPDOWN' ? '▾ Lista' : 'Aa Texto'}
+                            </span>
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-semibold text-gray-800 truncate">{field.name}</span>
+                              {field.is_required && (
+                                <span className="text-xs text-red-500 font-bold flex-shrink-0">* Obligatorio</span>
+                              )}
+                            </div>
+                            {field.field_type === 'DROPDOWN' && field.options?.length > 0 && (
+                              <p className="text-xs text-gray-400 truncate mt-0.5">
+                                {field.options.join(' · ')}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleDeleteField(field.id, field.name, project.id)}
+                          className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 p-1.5 rounded-lg hover:bg-red-50 transition-all flex-shrink-0 ml-2"
+                          title="Eliminar campo"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
-        </div>
-      </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
