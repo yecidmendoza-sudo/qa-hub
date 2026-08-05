@@ -87,16 +87,22 @@ Deno.serve(async (req: Request): Promise<Response> => {
   });
 
   try {
-    // ── 0. Verify caller role (ADMIN or QA_LEAD only) ─────────────────────
+    // ── 0. Verify caller role (ADMIN or QA_LEAD only) + active status ────────
     const { data: callerProfile, error: roleError } = await supabase
       .from("profiles")
-      .select("role")
+      .select("role, active")
       .eq("email", created_by)
       .maybeSingle();
 
     if (roleError) throw new Error(`Role lookup failed: ${roleError.message}`);
     if (!callerProfile) {
       return jsonError(`User not found: ${created_by}`, 404);
+    }
+    if (callerProfile.active === false) {
+      return jsonError(
+        `La cuenta "${created_by}" está desactivada. Contacta a tu admin para reactivarla.`,
+        403,
+      );
     }
     if (!['ADMIN', 'QA_LEAD'].includes(callerProfile.role)) {
       return jsonError(

@@ -55,10 +55,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
   });
 
   try {
-    // Look up the profile by email
+    // Look up the profile by email (incluye 'active' para verificar estado)
     const { data: profile } = await supabase
       .from("profiles")
-      .select("role, email")
+      .select("role, email, active")
       .eq("email", qa_email.toLowerCase().trim())
       .maybeSingle();
 
