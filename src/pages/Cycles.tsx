@@ -102,6 +102,8 @@ export default function Cycles() {
       setIsVersionModalOpen(false);
       setNewVersionName('');
       loadVersions();
+    } catch (err: any) {
+      alert(`Error al crear release: ${err.message ?? 'Inténtalo de nuevo'}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -123,6 +125,8 @@ export default function Cycles() {
       );
       setIsCycleModalOpen(false);
       navigate(`/cycles/${data.id}`);
+    } catch (err: any) {
+      alert(`Error al crear ciclo: ${err.message ?? 'Inténtalo de nuevo'}`);
     } finally {
       setIsSubmitting(false);
     }

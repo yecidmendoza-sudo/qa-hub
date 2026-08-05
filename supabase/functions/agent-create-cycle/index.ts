@@ -11,7 +11,7 @@ const CORS_HEADERS = {
     "Content-Type, Authorization, x-api-key, x-client-info, apikey",
 };
 
-const QA_HUB_BASE_URL = "https://qa-hub-qvnt-jade.vercel.app";
+const QA_HUB_BASE_URL = Deno.env.get("QA_HUB_BASE_URL") ?? "https://qa-hub-qvnt-jade.vercel.app";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 

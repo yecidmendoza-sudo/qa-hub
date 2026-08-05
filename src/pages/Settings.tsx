@@ -129,7 +129,11 @@ function UserManagement() {
       .from('profiles')
       .update({ active: !currentActive })
       .eq('id', userId);
-    if (!error) fetchUsers();
+    if (error) {
+      setResetMsg({ type: 'error', text: `Error al cambiar estado: ${error.message}`, userId });
+    } else {
+      fetchUsers();
+    }
     setToggleLoadingId(null);
   };
 

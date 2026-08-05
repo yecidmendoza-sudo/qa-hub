@@ -57,44 +57,76 @@ export default function Matrix() {
 
   // ── Handlers ────────────────────────────────────────────────────────────────
   const handleAddColumn = async (name: string, type: string, options: string[]) => {
-    const updatedCols = await addCustomColumn(cycle, name, type, options, profile.email);
-    setCycle({ ...cycle, custom_columns: updatedCols });
+    try {
+      const updatedCols = await addCustomColumn(cycle, name, type, options, profile.email);
+      setCycle({ ...cycle, custom_columns: updatedCols });
+    } catch (err: any) {
+      alert(`Error al agregar columna: ${err.message}`);
+    }
   };
 
   const handleDeleteColumn = async (colIdentifier: string) => {
     if (!window.confirm('¿Seguro que deseas eliminar esta columna?')) return;
-    const updatedCols = await deleteCustomColumn(cycle, colIdentifier, profile.email);
-    setCycle({ ...cycle, custom_columns: updatedCols });
+    try {
+      const updatedCols = await deleteCustomColumn(cycle, colIdentifier, profile.email);
+      setCycle({ ...cycle, custom_columns: updatedCols });
+    } catch (err: any) {
+      alert(`Error al eliminar columna: ${err.message}`);
+    }
   };
 
   const handleCustomDataChange = async (caseId: string, existingData: any, colId: string, value: string) => {
-    const updated = await updateCustomData(caseId, existingData, colId, value);
-    setCases(cases.map(c => c.id === caseId ? { ...c, custom_data: updated } : c));
+    try {
+      const updated = await updateCustomData(caseId, existingData, colId, value);
+      setCases(cases.map(c => c.id === caseId ? { ...c, custom_data: updated } : c));
+    } catch (err: any) {
+      console.error('Error al actualizar dato:', err.message);
+    }
   };
 
   const handleStatusChange = async (testCase: any, newStatus: string) => {
-    const exec = testCase.executions?.[0];
-    await updateExecution(cycle, testCase, newStatus, exec?.id || null, profile.email);
-    loadMatrix();
+    try {
+      const exec = testCase.executions?.[0];
+      await updateExecution(cycle, testCase, newStatus, exec?.id || null, profile.email);
+      loadMatrix();
+    } catch (err: any) {
+      console.error('Error al cambiar estado:', err.message);
+    }
   };
 
   const handleAddRow = async () => {
-    await addTestCase(id!, cases.length);
-    loadMatrix();
+    try {
+      await addTestCase(id!, cases.length);
+      loadMatrix();
+    } catch (err: any) {
+      alert(`Error al agregar caso: ${err.message}`);
+    }
   };
 
   const handleDeleteRow = async (caseId: string) => {
     if (!window.confirm('¿Seguro que deseas eliminar este caso de prueba?')) return;
-    await deleteTestCase(caseId);
-    setCases(cases.filter(c => c.id !== caseId));
+    try {
+      await deleteTestCase(caseId);
+      setCases(cases.filter(c => c.id !== caseId));
+    } catch (err: any) {
+      alert(`Error al eliminar caso: ${err.message}`);
+    }
   };
 
   const handleObservationBlur = async (executionId: string | undefined, value: string) => {
-    if (executionId) await updateObservation(executionId, value);
+    try {
+      if (executionId) await updateObservation(executionId, value);
+    } catch (err: any) {
+      console.error('Error al guardar observación:', err.message);
+    }
   };
 
   const handleCellBlur = async (caseId: string, field: string, value: string) => {
-    await updateTestCaseField(caseId, field, value);
+    try {
+      await updateTestCaseField(caseId, field, value);
+    } catch (err: any) {
+      console.error('Error al guardar celda:', err.message);
+    }
   };
 
   // ── Derived state ────────────────────────────────────────────────────────────
