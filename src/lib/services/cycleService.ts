@@ -42,7 +42,8 @@ export const deleteVersion = async (
   versionName: string,
   userEmail: string
 ) => {
-  await supabase.from('test_versions').delete().eq('id', versionId);
+  const { error } = await supabase.from('test_versions').delete().eq('id', versionId);
+  if (error) throw new Error(`No se pudo eliminar la versión: ${error.message}`);
   await logAudit(projectId, userEmail, 'DELETED', 'VERSION', versionId, {
     name: versionName,
   });
@@ -83,7 +84,8 @@ export const deleteCycle = async (
   cycleType: string,
   userEmail: string
 ) => {
-  await supabase.from('test_cycles').delete().eq('id', cycleId);
+  const { error } = await supabase.from('test_cycles').delete().eq('id', cycleId);
+  if (error) throw new Error(`No se pudo eliminar el ciclo: ${error.message}`);
   await logAudit(projectId, userEmail, 'DELETED', 'CYCLE', cycleId, {
     type: cycleType,
   });

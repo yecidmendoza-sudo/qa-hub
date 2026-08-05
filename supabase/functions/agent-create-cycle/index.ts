@@ -218,7 +218,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       project_id: project.id,
       user_email: created_by,
       action: "NEW",
-      entity: "CYCLE",
+      entity_type: "CYCLE",
       entity_id: cycleId,
       details: {
         project_name: project.name,

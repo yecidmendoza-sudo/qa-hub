@@ -123,7 +123,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       await supabaseDb.from("audit_logs").insert({
         user_email: invited_by ?? "admin",
         action: "RESET_PASSWORD",
-        entity: "USER",
+        entity_type: "USER",
         entity_id: targetUserId,
         details: { target_email: email },
       });
@@ -226,7 +226,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       await adminClient.from("audit_logs").insert({
         user_email: invited_by ?? "admin",
         action: "CREATE",
-        entity: "USER",
+        entity_type: "USER",
         entity_id: userId,
         details: { email, role: assignedRole, project_ids: project_ids ?? [] },
       });

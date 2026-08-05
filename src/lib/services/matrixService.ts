@@ -70,7 +70,8 @@ export const updateCustomData = async (
   value: string
 ) => {
   const updatedData = { ...existingData, [colId]: value };
-  await supabase.from('test_cases').update({ custom_data: updatedData }).eq('id', caseId);
+  const { error } = await supabase.from('test_cases').update({ custom_data: updatedData }).eq('id', caseId);
+  if (error) throw error;
   return updatedData;
 };
 
@@ -82,14 +83,16 @@ export const updateExecution = async (
   userEmail: string
 ) => {
   if (existingExecutionId) {
-    await supabase
+    const { error } = await supabase
       .from('test_executions')
       .update({ status: newStatus })
       .eq('id', existingExecutionId);
+    if (error) throw error;
   } else {
-    await supabase
+    const { error } = await supabase
       .from('test_executions')
-      .insert({ case_id: testCase.id, status: newStatus });
+      .insert({ case_id: testCase.id, cycle_id: testCase.cycle_id, status: newStatus });
+    if (error) throw error;
   }
   await logAudit(
     cycle.project_id,
@@ -118,8 +121,10 @@ export const addTestCase = async (cycleId: string, count: number) => {
 };
 
 export const deleteTestCase = async (caseId: string) => {
-  await supabase.from('test_executions').delete().eq('case_id', caseId);
-  await supabase.from('test_cases').delete().eq('id', caseId);
+  const { error: execErr } = await supabase.from('test_executions').delete().eq('case_id', caseId);
+  if (execErr) throw execErr;
+  const { error: caseErr } = await supabase.from('test_cases').delete().eq('id', caseId);
+  if (caseErr) throw caseErr;
 };
 
 export const updateTestCaseField = async (
@@ -127,11 +132,13 @@ export const updateTestCaseField = async (
   field: string,
   value: string
 ) => {
-  await supabase.from('test_cases').update({ [field]: value }).eq('id', caseId);
+  const { error } = await supabase.from('test_cases').update({ [field]: value }).eq('id', caseId);
+  if (error) throw error;
 };
 
 export const updateObservation = async (executionId: string, value: string) => {
-  await supabase.from('test_executions').update({ observation: value }).eq('id', executionId);
+  const { error } = await supabase.from('test_executions').update({ observation: value }).eq('id', executionId);
+  if (error) throw error;
 };
 
 // Escapa un campo CSV: lo envuelve en comillas si contiene coma, comilla o newline

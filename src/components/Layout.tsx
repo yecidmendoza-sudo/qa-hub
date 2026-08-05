@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, FolderKanban, Settings, Beaker, LogOut, ChevronDown, Menu, X, FolderOpen } from 'lucide-react';
+import { LayoutDashboard, FolderKanban, Settings, Beaker, LogOut, ChevronDown, Menu, X, FolderOpen, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../lib/supabase/auth';
 
 export default function Layout() {
@@ -8,11 +8,15 @@ export default function Layout() {
   const { signOut, userProjects, selectedProject, setSelectedProject, profile } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  const isAdmin = profile?.role === 'ADMIN';
+  const isAdminOrLead = profile?.role === 'ADMIN' || profile?.role === 'QA_LEAD';
+
   const navItems = [
-    { name: 'Dashboard', path: '/', icon: LayoutDashboard },
-    { name: 'Proyectos', path: '/projects', icon: FolderKanban },
-    { name: 'Ciclos de Pruebas', path: '/cycles', icon: Beaker },
-    { name: 'Mi Espacio', path: '/my-space', icon: FolderOpen },
+    { name: 'Dashboard', path: '/', icon: LayoutDashboard, show: true },
+    { name: 'Proyectos', path: '/projects', icon: FolderKanban, show: isAdminOrLead },
+    { name: 'Ciclos de Pruebas', path: '/cycles', icon: Beaker, show: true },
+    { name: 'Mi Espacio', path: '/my-space', icon: FolderOpen, show: true },
+    { name: 'Admin Board', path: '/admin', icon: ShieldCheck, show: isAdmin },
   ];
 
   const closeSidebar = () => setSidebarOpen(false);
@@ -62,7 +66,7 @@ export default function Layout() {
 
       {/* Nav */}
       <nav className="flex-1 p-4 space-y-1">
-        {navItems.map((item) => {
+        {navItems.filter(item => item.show).map((item) => {
           const Icon = item.icon;
           const isActive = location.pathname === item.path;
           return (

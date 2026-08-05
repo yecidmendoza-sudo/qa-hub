@@ -151,6 +151,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     // ── 2. Build bulk upsert payload ──────────────────────────────────────
     const upsertRows: object[] = [];
+    const missingTickets: string[] = [];
+    const auditEntries: object[] = [];
 
     for (const result of results) {
       const caseId = caseMap.get(result.ticket_id);
@@ -171,7 +173,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
           project_id: projectId,
           user_email: reported_by,
           action: "UPDATE",
-          entity: "EXECUTION",
+          entity_type: "EXECUTION",
           entity_id: caseId,
           details: {
             cycle_id,

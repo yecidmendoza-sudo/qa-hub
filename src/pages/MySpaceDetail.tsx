@@ -4,7 +4,8 @@ import { useAuth } from '../lib/supabase/auth';
 import { supabase } from '../lib/supabase/client';
 import { ArrowLeft, Copy, Eye, Check, FlaskConical } from 'lucide-react';
 
-const PUBLIC_BASE = 'https://qa-hub-qvnt-jade.vercel.app/#/m';
+// URL base dinámica — funciona en cualquier entorno (dev, staging, prod)
+const PUBLIC_BASE = `${window.location.origin}/#/m`;
 
 type MatrixVersion = {
   id: string;
