@@ -149,40 +149,23 @@ Deno.serve(async (req: Request): Promise<Response> => {
       (testCases ?? []).map((c) => [c.ticket_id, c.id]),
     );
 
-    // ── 2. Upsert test_executions ─────────────────────────────────────────
-    const auditEntries: object[] = [];
-    let updatedCount = 0;
-    const missingTickets: string[] = [];
+    // ── 2. Build bulk upsert payload ──────────────────────────────────────
+    const upsertRows: object[] = [];
 
     for (const result of results) {
       const caseId = caseMap.get(result.ticket_id);
-
       if (!caseId) {
         missingTickets.push(result.ticket_id);
         continue;
       }
 
-      const { error: upsertError } = await supabase
-        .from("test_executions")
-        .upsert(
-          {
-            case_id: caseId,
-            cycle_id: cycle_id,
-            status: result.status,
-            observation: result.observation ?? null,
-          },
-          { onConflict: "case_id" },
-        );
+      upsertRows.push({
+        case_id: caseId,
+        cycle_id: cycle_id,
+        status: result.status,
+        observation: result.observation ?? null,
+      });
 
-      if (upsertError) {
-        throw new Error(
-          `Execution upsert failed for ${result.ticket_id}: ${upsertError.message}`,
-        );
-      }
-
-      updatedCount++;
-
-      // Prepare audit entry for this result
       if (projectId) {
         auditEntries.push({
           project_id: projectId,
@@ -199,6 +182,19 @@ Deno.serve(async (req: Request): Promise<Response> => {
         });
       }
     }
+
+    // Bulk upsert all executions in a single DB round-trip
+    if (upsertRows.length > 0) {
+      const { error: bulkError } = await supabase
+        .from("test_executions")
+        .upsert(upsertRows, { onConflict: "case_id" });
+
+      if (bulkError) {
+        throw new Error(`Bulk execution upsert failed: ${bulkError.message}`);
+      }
+    }
+
+    const updatedCount = upsertRows.length;
 
     // ── 3. Compute new cycle status ───────────────────────────────────────
     const { data: allExecutions, error: execFetchError } = await supabase

@@ -134,12 +134,20 @@ export const updateObservation = async (executionId: string, value: string) => {
   await supabase.from('test_executions').update({ observation: value }).eq('id', executionId);
 };
 
+// Escapa un campo CSV: lo envuelve en comillas si contiene coma, comilla o newline
+function escapeCsvField(value: string): string {
+  if (/[",\n\r]/.test(value)) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+}
+
 export const downloadTemplate = (cycle: any) => {
   const customCols = cycle?.custom_columns || [];
   const headers = ['Ticket ID', 'Task Name', 'Modulo', 'Expected Result'];
   customCols.forEach((col: any) => headers.push(col.name));
-  const csvContent = headers.join(',') + '\n';
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const csvContent = headers.map(escapeCsvField).join(',') + '\n';
+  const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
@@ -147,4 +155,5 @@ export const downloadTemplate = (cycle: any) => {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 };

@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase/client';
 import { Shield, Mail, User, ListPlus, Trash2, Plus, KeyRound, Eye, EyeOff, Users, ArrowLeft, Copy, Check, Pencil, MoreVertical, X } from 'lucide-react';
 
 function UserManagement() {
-  const { userProjects } = useAuth();
+  const { userProjects, profile } = useAuth();
   
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('QA_TESTER');
@@ -77,31 +77,27 @@ function UserManagement() {
     setCreateLoading(true);
     setCreateMsg(null);
     try {
-      const res = await fetch(
-        'https://leexvmoadhzwthzcbhph.supabase.co/functions/v1/admin-invite-user',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-api-key': import.meta.env.VITE_AGENT_API_KEY },
-          body: JSON.stringify({
-            action: 'create',
-            email: email.trim(),
-            role,
-            project_ids: ['QA_TESTER', 'QA_LEAD'].includes(role) ? selectedProjects : undefined
-          }),
-        }
-      );
-      const data = await res.json();
-      if (data.success) {
+      const { data, error } = await supabase.functions.invoke('admin-invite-user', {
+        body: {
+          action: 'create',
+          email: email.trim(),
+          role,
+          invited_by: profile?.email,
+          project_ids: ['QA_TESTER', 'QA_LEAD'].includes(role) ? selectedProjects : undefined
+        },
+        headers: { 'x-api-key': import.meta.env.VITE_AGENT_API_KEY },
+      });
+      if (error || !data?.success) {
+        setCreateMsg({ type: 'error', text: data?.error || error?.message || 'Error al crear usuario' });
+      } else {
         setCreateMsg({ type: 'ok', text: '✅ Usuario creado', password: data.generated_password });
         setEmail('');
         setSelectedProjects([]);
         setRole('QA_TESTER');
         fetchUsers();
-      } else {
-        setCreateMsg({ type: 'error', text: data.error || 'Error al crear usuario' });
       }
-    } catch {
-      setCreateMsg({ type: 'error', text: 'Error de conexión.' });
+    } catch (err: any) {
+      setCreateMsg({ type: 'error', text: err.message || 'Error de conexión.' });
     } finally {
       setCreateLoading(false);
     }
@@ -111,25 +107,17 @@ function UserManagement() {
     setResetLoadingId(userId);
     setResetMsg(null);
     try {
-      const res = await fetch(
-        'https://leexvmoadhzwthzcbhph.supabase.co/functions/v1/admin-invite-user',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-api-key': import.meta.env.VITE_AGENT_API_KEY },
-          body: JSON.stringify({
-            action: 'reset',
-            email: userEmail
-          }),
-        }
-      );
-      const data = await res.json();
-      if (data.success) {
-        setResetMsg({ type: 'ok', text: '✅ Password reseteado', password: data.new_password, userId });
+      const { data, error } = await supabase.functions.invoke('admin-invite-user', {
+        body: { action: 'reset', email: userEmail, invited_by: profile?.email },
+        headers: { 'x-api-key': import.meta.env.VITE_AGENT_API_KEY },
+      });
+      if (error || !data?.success) {
+        setResetMsg({ type: 'error', text: data?.error || error?.message || 'Error al resetear password', userId });
       } else {
-        setResetMsg({ type: 'error', text: data.error || 'Error al resetear password', userId });
+        setResetMsg({ type: 'ok', text: '✅ Password reseteado', password: data.new_password, userId });
       }
-    } catch {
-      setResetMsg({ type: 'error', text: 'Error de conexión.', userId });
+    } catch (err: any) {
+      setResetMsg({ type: 'error', text: err.message || 'Error de conexión.', userId });
     } finally {
       setResetLoadingId(null);
     }

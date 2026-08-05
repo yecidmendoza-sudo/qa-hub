@@ -14,11 +14,12 @@ const CORS_HEADERS = {
 // ── Types ──────────────────────────────────────────────────────────────────
 
 interface InviteUserPayload {
-  action?: string;       // 'create' (default) | 'reset'
+  action?: string;        // 'create' (default) | 'reset'
   email: string;
-  project_ids?: string[]; // requerido para QA_TESTER en action=create
-  role?: string;          // 'QA_TESTER' (default) | 'ADMIN'
+  project_ids?: string[]; // requerido para QA_TESTER y QA_LEAD en action=create
+  role?: string;          // 'QA_TESTER' (default) | 'ADMIN' | 'QA_LEAD'
   user_id?: string;       // requerido para action=reset
+  invited_by?: string;    // email del admin que ejecuta la acción (para audit log)
 }
 
 function generatePassword(): string {
@@ -59,7 +60,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return jsonError("Invalid JSON body", 400);
   }
 
-  const { action = 'create', email, project_ids, role: rawRole, user_id } = payload;
+  const { action = 'create', email, project_ids, role: rawRole, user_id, invited_by } = payload;
   const VALID_ROLES = ['ADMIN', 'QA_LEAD', 'QA_TESTER'];
   const assignedRole = VALID_ROLES.includes(rawRole ?? '') ? rawRole! : 'QA_TESTER';
 
@@ -113,6 +114,20 @@ Deno.serve(async (req: Request): Promise<Response> => {
     if (updateError) {
       return jsonError(`Password reset failed: ${updateError.message}`, 500);
     }
+
+    // Audit log (non-fatal)
+    try {
+      const supabaseDb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
+        auth: { persistSession: false },
+      });
+      await supabaseDb.from("audit_logs").insert({
+        user_email: invited_by ?? "admin",
+        action: "RESET_PASSWORD",
+        entity: "USER",
+        entity_id: targetUserId,
+        details: { target_email: email },
+      });
+    } catch { /* non-fatal */ }
 
     return jsonResponse({
       success: true,
@@ -206,6 +221,17 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     // ── Response ──────────────────────────────────────────────────────────
+    // Audit log (non-fatal)
+    try {
+      await adminClient.from("audit_logs").insert({
+        user_email: invited_by ?? "admin",
+        action: "CREATE",
+        entity: "USER",
+        entity_id: userId,
+        details: { email, role: assignedRole, project_ids: project_ids ?? [] },
+      });
+    } catch { /* non-fatal */ }
+
     return jsonResponse({
       success: true,
       action: 'create',

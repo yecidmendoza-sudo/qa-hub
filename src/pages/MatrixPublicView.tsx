@@ -101,7 +101,7 @@ export default function MatrixPublicView() {
       setLoading(true);
       try {
         const res = await fetch(
-          `https://leexvmoadhzwthzcbhph.supabase.co/functions/v1/matrix-public-view?uuid=${uuid}`
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/matrix-public-view?uuid=${uuid}`
         );
         if (res.status === 404) {
           setNotFound(true);

@@ -228,6 +228,7 @@ function QATeamSection() {
 // ── Section B: Invite QA ──────────────────────────────────────────────────────
 
 function InviteQASection() {
+  const { profile } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [email, setEmail] = useState('');
   const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
@@ -261,20 +262,16 @@ function InviteQASection() {
     }
     setLoading(true);
     try {
-      const res = await fetch(
-        'https://leexvmoadhzwthzcbhph.supabase.co/functions/v1/admin-invite-user',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': import.meta.env.VITE_AGENT_API_KEY ?? '',
-          },
-          body: JSON.stringify({ email: email.trim(), project_ids: selectedProjectIds }),
-        }
-      );
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Error desconocido' }));
-        showToast(`Error: ${err.error ?? err.message ?? 'Error al enviar invitación'}`, 'error');
+      const { data, error } = await supabase.functions.invoke('admin-invite-user', {
+        body: {
+          email: email.trim(),
+          project_ids: selectedProjectIds,
+          invited_by: profile?.email,
+        },
+        headers: { 'x-api-key': import.meta.env.VITE_AGENT_API_KEY ?? '' },
+      });
+      if (error || !data?.success) {
+        showToast(`Error: ${data?.error ?? error?.message ?? 'Error al enviar invitación'}`, 'error');
       } else {
         showToast(`✅ Invitación enviada a ${email.trim()}`, 'ok');
         setEmail('');
