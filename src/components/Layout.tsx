@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, FolderKanban, Settings, Beaker, LogOut, ChevronDown, Menu, X, FolderOpen, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, FolderKanban, Settings, Beaker, LogOut, ChevronDown, Menu, X, FolderOpen } from 'lucide-react';
 import { useAuth } from '../lib/supabase/auth';
 
 export default function Layout() {
@@ -8,7 +8,6 @@ export default function Layout() {
   const { signOut, userProjects, selectedProject, setSelectedProject, profile } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const isAdmin = profile?.role === 'ADMIN';
   const isAdminOrLead = profile?.role === 'ADMIN' || profile?.role === 'QA_LEAD';
 
   const navItems = [
@@ -16,7 +15,6 @@ export default function Layout() {
     { name: 'Proyectos', path: '/projects', icon: FolderKanban, show: isAdminOrLead },
     { name: 'Ciclos de Pruebas', path: '/cycles', icon: Beaker, show: true },
     { name: 'Mi Espacio', path: '/my-space', icon: FolderOpen, show: true },
-    { name: 'Admin Board', path: '/admin', icon: ShieldCheck, show: isAdmin },
   ];
 
   const closeSidebar = () => setSidebarOpen(false);

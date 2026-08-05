@@ -13,7 +13,6 @@ import MySpace from './pages/MySpace';
 import MySpaceDetail from './pages/MySpaceDetail';
 
 import AcceptInvite from './pages/AcceptInvite';
-import AdminBoard from './pages/AdminBoard';
 
 const ProtectedRoute = ({ children }: { children: ReactElement }) => {
   const { session, loading } = useAuth();
@@ -41,7 +40,6 @@ function AppRoutes() {
         <Route path="settings" element={<Settings />} />
         <Route path="my-space" element={<MySpace />} />
         <Route path="my-space/:ticketId" element={<MySpaceDetail />} />
-        <Route path="admin" element={<AdminBoard />} />
         {/* 404 catch-all */}
         <Route path="*" element={<Navigate to="/" replace />} />
 
