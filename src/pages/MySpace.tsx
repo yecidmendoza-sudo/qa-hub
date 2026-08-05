@@ -222,7 +222,7 @@ export default function MySpace() {
                                 )}
                               </div>
                               <a
-                                href={`https://qa-hub-qvnt-jade.vercel.app/#/m/${v.public_uuid}`}
+                                href={`${window.location.origin}/#/m/${v.public_uuid}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 onClick={e => e.stopPropagation()}
