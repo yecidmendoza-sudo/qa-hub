@@ -895,6 +895,7 @@ function CustomFieldsSection() {
 export default function Settings() {
   const { profile } = useAuth();
   const isAdmin = profile?.role === 'ADMIN';
+  const isAdminOrLead = profile?.role === 'ADMIN' || profile?.role === 'QA_LEAD';
   
   const [section, setSection] = useState<'profile' | 'fields' | 'users' | null>(null);
 
@@ -907,7 +908,7 @@ export default function Settings() {
       case 'profile':
         return <ProfileSection />;
       case 'fields':
-        return <CustomFieldsSection />;
+        return isAdminOrLead ? <CustomFieldsSection /> : <div />;
       case 'users':
         return isAdmin ? <UserManagement /> : <div />;
       default:
@@ -927,19 +928,21 @@ export default function Settings() {
               </div>
             </div>
 
-            <div 
-              onClick={() => setSection('fields')}
-              className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md hover:green-300 transition-all cursor-pointer group flex flex-col"
-            >
-              <div className="bg-green-50 w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:bg-green-100 transition-colors">
-                <ListPlus className="w-6 h-6 text-green-600" />
+            {isAdminOrLead && (
+              <div 
+                onClick={() => setSection('fields')}
+                className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md hover:green-300 transition-all cursor-pointer group flex flex-col"
+              >
+                <div className="bg-green-50 w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:bg-green-100 transition-colors">
+                  <ListPlus className="w-6 h-6 text-green-600" />
+                </div>
+                <h3 className="text-lg font-bold text-gray-900 mb-2">Campos Personalizados</h3>
+                <p className="text-sm text-gray-500 flex-1">Configura campos obligatorios para los ciclos por cada proyecto.</p>
+                <div className="mt-4 text-green-600 font-semibold text-sm flex items-center">
+                  Abrir <ArrowLeft className="w-4 h-4 ml-1 rotate-180" />
+                </div>
               </div>
-              <h3 className="text-lg font-bold text-gray-900 mb-2">Campos Personalizados</h3>
-              <p className="text-sm text-gray-500 flex-1">Configura campos obligatorios para los ciclos por cada proyecto.</p>
-              <div className="mt-4 text-green-600 font-semibold text-sm flex items-center">
-                Abrir <ArrowLeft className="w-4 h-4 ml-1 rotate-180" />
-              </div>
-            </div>
+            )}
 
             {isAdmin && (
               <div 
