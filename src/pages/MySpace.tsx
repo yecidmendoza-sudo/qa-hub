@@ -1,7 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../lib/supabase/auth';
 import { supabase } from '../lib/supabase/client';
-import { FolderOpen, Search, FlaskConical, ChevronDown, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react';
+import {
+  FolderOpen, Search, FlaskConical, ChevronDown,
+  ExternalLink, ChevronLeft, ChevronRight, Trash2,
+} from 'lucide-react';
+import {
+  deletePersonalMatrixVersion,
+  deletePersonalMatrixFolder,
+} from '../lib/services/personalMatrixService';
 
 const PAGE_SIZE = 10;
 
@@ -53,6 +60,7 @@ export default function MySpace() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [expandedTickets, setExpandedTickets] = useState<Set<string>>(new Set());
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user?.email) return;
@@ -95,6 +103,61 @@ export default function MySpace() {
       else next.add(ticketId);
       return next;
     });
+  };
+
+  // ── Borrar una versión individual ────────────────────────────────────────────
+  const handleDeleteVersion = async (
+    e: React.MouseEvent,
+    versionId: string,
+    folderId: string,
+    ticketId: string,
+    versionNum: number
+  ) => {
+    e.stopPropagation();
+    if (!confirm(`¿Eliminar versión v${versionNum} de ${ticketId}? Esta acción no se puede deshacer.`)) return;
+
+    setDeletingId(versionId);
+    try {
+      const { folderDeleted } = await deletePersonalMatrixVersion(versionId, folderId);
+      if (folderDeleted) {
+        // Si se borró el folder completo, quitarlo del estado
+        setFolders(prev => prev.filter(f => f.id !== folderId));
+      } else {
+        // Solo quitar la versión del folder en el estado
+        setFolders(prev => prev.map(f =>
+          f.id !== folderId ? f : {
+            ...f,
+            personal_matrix_versions: f.personal_matrix_versions.filter(v => v.id !== versionId),
+          }
+        ));
+      }
+    } catch (err) {
+      console.error('Error al eliminar versión:', err);
+      alert('No se pudo eliminar la versión. Intenta de nuevo.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  // ── Borrar un folder completo (todas sus versiones) ──────────────────────────
+  const handleDeleteFolder = async (
+    e: React.MouseEvent,
+    folderId: string,
+    ticketId: string
+  ) => {
+    e.stopPropagation();
+    if (!confirm(`¿Eliminar TODAS las versiones de ${ticketId}? Esta acción no se puede deshacer.`)) return;
+
+    setDeletingId(folderId);
+    try {
+      await deletePersonalMatrixFolder(folderId);
+      setFolders(prev => prev.filter(f => f.id !== folderId));
+    } catch (err) {
+      console.error('Error al eliminar carpeta:', err);
+      alert('No se pudo eliminar el ticket. Intenta de nuevo.');
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   return (
@@ -149,7 +212,7 @@ export default function MySpace() {
             {paginated.map(folder => {
               const versions = folder.personal_matrix_versions ?? [];
               const isExpanded = expandedTickets.has(folder.ticket_id);
-              const latest = versions[0]; // ya ordenado desc por version_num
+              const latest = versions[0];
 
               return (
                 <div
@@ -189,8 +252,19 @@ export default function MySpace() {
                         </div>
                       )}
                     </div>
-                    <div className={`flex-shrink-0 ml-4 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}>
-                      <ChevronDown className="w-5 h-5 text-gray-400" />
+                    <div className="flex items-center gap-2 flex-shrink-0 ml-4">
+                      {/* Botón borrar todo el folder */}
+                      <button
+                        onClick={e => handleDeleteFolder(e, folder.id, folder.ticket_id)}
+                        disabled={deletingId === folder.id}
+                        title="Eliminar todas las versiones de este ticket"
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-40"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                      <div className={`transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}>
+                        <ChevronDown className="w-5 h-5 text-gray-400" />
+                      </div>
                     </div>
                   </button>
 
@@ -221,15 +295,29 @@ export default function MySpace() {
                                   <span className="text-xs text-gray-500 italic truncate max-w-xs">{v.notes}</span>
                                 )}
                               </div>
-                              <a
-                                href={`${window.location.origin}/#/m/${v.public_uuid}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={e => e.stopPropagation()}
-                                className="flex-shrink-0 ml-4 flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-3 py-1.5 rounded-lg transition-colors"
-                              >
-                                Ver <ExternalLink className="w-3 h-3" />
-                              </a>
+                              {/* Acciones de versión */}
+                              <div className="flex items-center gap-2 flex-shrink-0 ml-4">
+                                <a
+                                  href={`${window.location.origin}/#/m/${v.public_uuid}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={e => e.stopPropagation()}
+                                  className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-3 py-1.5 rounded-lg transition-colors"
+                                >
+                                  Ver <ExternalLink className="w-3 h-3" />
+                                </a>
+                                <button
+                                  onClick={e => handleDeleteVersion(e, v.id, folder.id, folder.ticket_id, v.version_num)}
+                                  disabled={deletingId === v.id}
+                                  title="Eliminar esta versión"
+                                  className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-40"
+                                >
+                                  {deletingId === v.id
+                                    ? <div className="w-3.5 h-3.5 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                                    : <Trash2 className="w-3.5 h-3.5" />
+                                  }
+                                </button>
+                              </div>
                             </div>
                           ))}
                         </div>

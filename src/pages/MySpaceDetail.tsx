@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/supabase/auth';
 import { supabase } from '../lib/supabase/client';
-import { ArrowLeft, Copy, Eye, Check, FlaskConical } from 'lucide-react';
+import { ArrowLeft, Copy, Eye, Check, FlaskConical, Trash2 } from 'lucide-react';
+import { deletePersonalMatrixVersion } from '../lib/services/personalMatrixService';
 
 // URL base dinámica — funciona en cualquier entorno (dev, staging, prod)
 const PUBLIC_BASE = `${window.location.origin}/#/m`;
@@ -95,6 +96,7 @@ export default function MySpaceDetail() {
   const navigate = useNavigate();
   const [folder, setFolder] = useState<Folder | null>(null);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user?.email || !ticketId) return;
@@ -114,6 +116,28 @@ export default function MySpaceDetail() {
 
     loadFolder();
   }, [user?.email, ticketId]);
+
+  const handleDeleteVersion = async (versionId: string, folderId: string, versionNum: number) => {
+    if (!confirm(`¿Eliminar versión v${versionNum}? Esta acción no se puede deshacer.`)) return;
+    setDeletingId(versionId);
+    try {
+      const { folderDeleted } = await deletePersonalMatrixVersion(versionId, folderId);
+      if (folderDeleted) {
+        // Si era la última versión, el folder se eliminó — volver a Mi Espacio
+        navigate('/my-space');
+      } else {
+        setFolder(prev => prev ? {
+          ...prev,
+          personal_matrix_versions: prev.personal_matrix_versions.filter(v => v.id !== versionId),
+        } : prev);
+      }
+    } catch (err) {
+      console.error('Error al eliminar versión:', err);
+      alert('No se pudo eliminar la versión. Intenta de nuevo.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -174,6 +198,9 @@ export default function MySpaceDetail() {
                     <th className="px-5 py-3 text-left font-semibold text-gray-500 text-xs uppercase tracking-wider">
                       Link público
                     </th>
+                    <th className="px-5 py-3 text-left font-semibold text-gray-500 text-xs uppercase tracking-wider">
+                      Acciones
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -209,6 +236,20 @@ export default function MySpaceDetail() {
                             <CopyLinkButton uuid={version.public_uuid} />
                             <ViewLinkButton uuid={version.public_uuid} />
                           </div>
+                        </td>
+                        <td className="px-5 py-4">
+                          <button
+                            onClick={() => handleDeleteVersion(version.id, folder!.id, version.version_num)}
+                            disabled={deletingId === version.id}
+                            title="Eliminar esta versión"
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 bg-gray-50 text-gray-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all disabled:opacity-40"
+                          >
+                            {deletingId === version.id
+                              ? <div className="w-3 h-3 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                              : <Trash2 className="w-3.5 h-3.5" />
+                            }
+                            Eliminar
+                          </button>
                         </td>
                       </tr>
                     ))}
