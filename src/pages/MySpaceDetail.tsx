@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/supabase/auth';
 import { supabase } from '../lib/supabase/client';
-import { ArrowLeft, Copy, Eye, Check, FlaskConical, Trash2 } from 'lucide-react';
+import { ArrowLeft, Copy, Eye, Check, FlaskConical, Trash2, Pencil } from 'lucide-react';
 import { deletePersonalMatrixVersion } from '../lib/services/personalMatrixService';
 
 // URL base dinámica — funciona en cualquier entorno (dev, staging, prod)
@@ -235,6 +235,12 @@ export default function MySpaceDetail() {
                           <div className="flex items-center gap-2">
                             <CopyLinkButton uuid={version.public_uuid} />
                             <ViewLinkButton uuid={version.public_uuid} />
+                            <button
+                              onClick={() => navigate(`/my-space/${ticketId}/${version.id}`)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-800 transition-all"
+                            >
+                              <Pencil className="w-3.5 h-3.5" /> Editar
+                            </button>
                           </div>
                         </td>
                         <td className="px-5 py-4">

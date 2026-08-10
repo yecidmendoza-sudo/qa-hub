@@ -1,0 +1,17 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Dockerfile.dev — qa-hub (Vite dev mode con hot reload)
+# El código se monta como volumen → no requiere rebuild al editar
+# ─────────────────────────────────────────────────────────────────────────────
+FROM node:22-slim
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm install --silent
+
+# El resto del código viene del volumen montado en docker-compose.local.yml
+
+EXPOSE 5173
+
+# --host expone Vite fuera del contenedor Docker
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

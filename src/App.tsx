@@ -11,6 +11,7 @@ import Settings from './pages/Settings';
 import MatrixPublicView from './pages/MatrixPublicView';
 import MySpace from './pages/MySpace';
 import MySpaceDetail from './pages/MySpaceDetail';
+import MySpaceMatrix from './pages/MySpaceMatrix';
 
 import AcceptInvite from './pages/AcceptInvite';
 
@@ -40,6 +41,7 @@ function AppRoutes() {
         <Route path="settings" element={<Settings />} />
         <Route path="my-space" element={<MySpace />} />
         <Route path="my-space/:ticketId" element={<MySpaceDetail />} />
+        <Route path="my-space/:ticketId/:versionId" element={<MySpaceMatrix />} />
         {/* 404 catch-all */}
         <Route path="*" element={<Navigate to="/" replace />} />
 

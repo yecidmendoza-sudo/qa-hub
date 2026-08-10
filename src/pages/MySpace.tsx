@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../lib/supabase/auth';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase/client';
 import {
   FolderOpen, Search, FlaskConical, ChevronDown,
-  ExternalLink, ChevronLeft, ChevronRight, Trash2,
+  ExternalLink, ChevronLeft, ChevronRight, Trash2, Pencil
 } from 'lucide-react';
 import {
   deletePersonalMatrixVersion,
@@ -55,6 +56,7 @@ function formatDateTime(dateStr: string) {
 
 export default function MySpace() {
   const { user, profile } = useAuth();
+  const navigate = useNavigate();
   const [folders, setFolders] = useState<Folder[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -306,6 +308,12 @@ export default function MySpace() {
                                 >
                                   Ver <ExternalLink className="w-3 h-3" />
                                 </a>
+                                <button
+                                  onClick={e => { e.stopPropagation(); navigate(`/my-space/${folder.ticket_id}/${v.id}`); }}
+                                  className="flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-3 py-1.5 rounded-lg transition-colors"
+                                >
+                                  <Pencil className="w-3 h-3" /> Editar
+                                </button>
                                 <button
                                   onClick={e => handleDeleteVersion(e, v.id, folder.id, folder.ticket_id, v.version_num)}
                                   disabled={deletingId === v.id}

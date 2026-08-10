@@ -83,6 +83,7 @@ type MatrixData = {
   content_md: string;
   fixtures_json?: any;
   notes?: string;
+  matrix_data?: { columns: any[]; rows: any[] } | null;
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -92,7 +93,6 @@ export default function MatrixPublicView() {
   const [matrix, setMatrix] = useState<MatrixData | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
-  const [fixturesOpen, setFixturesOpen] = useState(false);
 
   useEffect(() => {
     if (!uuid) return;
@@ -221,28 +221,36 @@ export default function MatrixPublicView() {
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-widest">
             Casos de Prueba
           </h2>
-          <MarkdownTableRenderer md={matrix.content_md} />
+          {matrix.matrix_data ? (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-700">
+                    {(matrix.matrix_data.columns as any[]).map((col: any) => (
+                      <th key={col.id} className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">{col.name}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-800">
+                  {(matrix.matrix_data.rows as any[]).map((row: any) => (
+                    <tr key={row.id} className="hover:bg-gray-800/50 transition-colors">
+                      {(matrix.matrix_data!.columns as any[]).map((col: any) => {
+                        const val = row.cells[col.id] ?? '';
+                        if (col.type === 'status') {
+                          const cls: Record<string, string> = { PASS: 'bg-green-900 text-green-300', FAIL: 'bg-red-900 text-red-300', BLOCKED: 'bg-orange-900 text-orange-300', PENDING: 'bg-gray-700 text-gray-300' };
+                          return <td key={col.id} className="px-4 py-3"><span className={`text-xs font-bold px-2 py-0.5 rounded-full ${cls[val] ?? cls.PENDING}`}>{val || 'PENDING'}</span></td>;
+                        }
+                        return <td key={col.id} className="px-4 py-3 text-gray-300">{val}</td>;
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <MarkdownTableRenderer md={matrix.content_md} />
+          )}
         </div>
-
-        {/* ── Fixtures (collapsible) ───────────────────────────────────────── */}
-        {matrix.fixtures_json && (
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
-            <button
-              onClick={() => setFixturesOpen(o => !o)}
-              className="w-full flex items-center justify-between px-6 py-4 text-sm font-semibold text-gray-300 hover:bg-gray-800 transition-colors"
-            >
-              <span>📦 Fixtures JSON</span>
-              <span className="text-gray-500 text-xs">{fixturesOpen ? '▲ Colapsar' : '▼ Expandir'}</span>
-            </button>
-            {fixturesOpen && (
-              <div className="border-t border-gray-800 p-6">
-                <pre className="text-xs text-green-300 bg-gray-950 rounded-xl p-4 overflow-x-auto font-mono">
-                  {JSON.stringify(matrix.fixtures_json, null, 2)}
-                </pre>
-              </div>
-            )}
-          </div>
-        )}
 
         {/* ── Footer ───────────────────────────────────────────────────────── */}
         <div className="text-center py-4">
