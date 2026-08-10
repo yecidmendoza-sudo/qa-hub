@@ -3,7 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2, Settings2 } from 'lucide-react';
 import {
   parseMarkdownToMatrixData,
-  serializeMatrixDataToMarkdown,
   updatePersonalMatrixData,
   getPersonalMatrixVersion,
   type MatrixData,
