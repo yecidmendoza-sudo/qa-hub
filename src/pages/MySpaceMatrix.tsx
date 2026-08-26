@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Settings2 } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Settings2, Download, Upload } from 'lucide-react';
+import Papa from 'papaparse';
 import {
   parseMarkdownToMatrixData,
   updatePersonalMatrixData,
@@ -176,7 +177,60 @@ export default function MySpaceMatrix() {
     });
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // ── CSV ref ───────────────────────────────────────────────────────────────
+  const csvInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Download template ─────────────────────────────────────────────────────
+  const handleDownloadTemplate = () => {
+    if (!matrixData) return;
+    const headers = matrixData.columns.map(c => c.name).join(',');
+    const csv = headers + '\n';
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `plantilla_${ticketId}_v${versionMeta?.version_num ?? 1}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // ── Import CSV ────────────────────────────────────────────────────────────
+  const handleImportCsv = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !matrixData) return;
+
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        const rows = results.data as Record<string, string>[];
+        if (!rows || rows.length === 0) return;
+
+        const newRows: MatrixRow[] = rows.map(row => {
+          const cells: Record<string, string> = {};
+          matrixData.columns.forEach(col => {
+            const key = Object.keys(row).find(
+              k => k.toLowerCase().trim() === col.name.toLowerCase().trim()
+            );
+            cells[col.id] = key ? (row[key] ?? '') : (col.type === 'status' ? 'PENDING' : '');
+          });
+          return { id: genId(), cells };
+        });
+
+        const updated: MatrixData = {
+          ...matrixData,
+          rows: [...matrixData.rows, ...newRows],
+        };
+        setMatrixData(updated);
+        save(updated);
+      },
+      error: () => alert('Error al leer el archivo CSV.'),
+    });
+
+    if (csvInputRef.current) csvInputRef.current.value = '';
+  };
+
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -238,6 +292,30 @@ export default function MySpaceMatrix() {
               Guardando…
             </span>
           )}
+          {/* Descargar Plantilla */}
+          <button
+            onClick={handleDownloadTemplate}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition-colors"
+            title="Descargar plantilla CSV con las columnas actuales"
+          >
+            <Download className="w-4 h-4" /> Descargar Plantilla
+          </button>
+          {/* Importar CSV */}
+          <input
+            type="file"
+            accept=".csv"
+            ref={csvInputRef}
+            onChange={handleImportCsv}
+            className="hidden"
+          />
+          <button
+            onClick={() => csvInputRef.current?.click()}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-green-700 hover:text-green-900 bg-green-50 hover:bg-green-100 border border-green-200 rounded-lg transition-colors"
+            title="Importar casos desde un archivo CSV"
+          >
+            <Upload className="w-4 h-4" /> Importar CSV
+          </button>
+          {/* Añadir Columna */}
           <button
             onClick={() => setIsColModalOpen(true)}
             className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-colors"
