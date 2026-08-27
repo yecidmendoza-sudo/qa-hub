@@ -12,6 +12,7 @@ type QAMember = {
   project_id: string;
   project_name: string;
   matrix_count: number;
+  role: string;
 };
 
 function QATeamSection() {
@@ -32,15 +33,16 @@ function QATeamSection() {
 
       if (!assignments) { setLoading(false); return; }
 
-      // Filter only QA_TESTER role
+      // Include both QA_TESTER and QA_LEAD
       const qaAssignments = assignments.filter(
-        (a: any) => a.profiles?.role === 'QA_TESTER'
+        (a: any) => ['QA_TESTER', 'QA_LEAD'].includes(a.profiles?.role)
       );
 
       // Get matrix counts per QA per project
       const memberList: QAMember[] = [];
       for (const a of qaAssignments as any[]) {
         const email = a.profiles?.email || '';
+        const role  = a.profiles?.role  || 'QA_TESTER';
         const { count } = await supabase
           .from('personal_matrix_folders')
           .select('*', { count: 'exact', head: true })
@@ -52,6 +54,7 @@ function QATeamSection() {
           project_id: a.project_id,
           project_name: a.projects?.name || 'Desconocido',
           matrix_count: count || 0,
+          role,
         });
       }
 
@@ -155,21 +158,28 @@ function QATeamSection() {
                   <div className="divide-y divide-gray-100">
                     {projectMembers.map(m => (
                       <div key={m.user_id + m.project_id}
-                        className="flex items-center justify-between px-4 py-3 bg-white hover:bg-gray-50 transition-colors">
-                        <div className="flex items-center gap-3">
-                          <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center">
-                            <span className="text-xs font-bold text-blue-600">
-                              {m.email.charAt(0).toUpperCase()}
+                          className="flex items-center justify-between px-4 py-3 bg-white hover:bg-gray-50 transition-colors">
+                          <div className="flex items-center gap-3">
+                            <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center">
+                              <span className="text-xs font-bold text-blue-600">
+                                {m.email.charAt(0).toUpperCase()}
+                              </span>
+                            </div>
+                            <span className="text-sm text-gray-700">{m.email}</span>
+                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${
+                              m.role === 'QA_LEAD'
+                                ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
+                                : 'bg-blue-50 text-blue-600 border-blue-200'
+                            }`}>
+                              {m.role === 'QA_LEAD' ? 'Lead' : 'Tester'}
                             </span>
                           </div>
-                          <span className="text-sm text-gray-700">{m.email}</span>
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full">
+                              {m.matrix_count} {m.matrix_count === 1 ? 'matriz' : 'matrices'}
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full">
-                            {m.matrix_count} {m.matrix_count === 1 ? 'matriz' : 'matrices'}
-                          </span>
-                        </div>
-                      </div>
                     ))}
                   </div>
                 )}
