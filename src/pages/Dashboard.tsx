@@ -1,94 +1,138 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase/client';
-import { Activity, CheckCircle2, XCircle, TrendingUp, Users, Search, ChevronDown, ChevronUp } from 'lucide-react';
+import { Activity, CheckCircle2, XCircle, TrendingUp, Users, Search, ChevronDown, ExternalLink } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../lib/supabase/auth';
 
-// ── QA Team Section (solo ADMIN) ──────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 
-type QAMember = {
-  user_id: string;
-  email: string;
-  project_id: string;
+type MatrixFolder = {
+  id: string;
+  ticket_id: string;
   project_name: string;
-  matrix_count: number;
-  role: string;
+  versions: {
+    id: string;
+    version_num: number;
+    stage: string;
+    matrix_type: string;
+    public_uuid: string;
+  }[];
 };
 
-function QATeamSection() {
-  const [members, setMembers] = useState<QAMember[]>([]);
-  const [loading, setLoading] = useState(true);
+type QAMember = {
+  email: string;
+  role: string;
+  folders: MatrixFolder[];
+};
+
+// ── QA Team Section ───────────────────────────────────────────────────────────
+
+function QATeamSection({ role: viewerRole, userProjects }: { role: string; userProjects: { id: string; name: string }[] }) {
+  const [members, setMembers]           = useState<QAMember[]>([]);
+  const [loading, setLoading]           = useState(true);
   const [filterProject, setFilterProject] = useState('ALL');
-  const [filterEmail, setFilterEmail] = useState('');
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [filterEmail, setFilterEmail]   = useState('');
+  const [expandedEmail, setExpandedEmail] = useState<Set<string>>(new Set());
+
+  const isAdmin = viewerRole === 'ADMIN';
 
   useEffect(() => {
     async function load() {
       setLoading(true);
-      // Get all user-project assignments with profile and project info
-      const { data: assignments } = await supabase
-        .from('user_projects')
-        .select('user_id, project_id, profiles(email, role), projects(name)')
-        .order('project_id');
 
-      if (!assignments) { setLoading(false); return; }
+      // 1. Get list of QA emails to show
+      let qaEmails: { email: string; role: string }[] = [];
 
-      // Include both QA_TESTER and QA_LEAD
-      const qaAssignments = assignments.filter(
-        (a: any) => ['QA_TESTER', 'QA_LEAD'].includes(a.profiles?.role)
-      );
+      if (isAdmin) {
+        const { data } = await supabase
+          .from('profiles')
+          .select('email, role')
+          .in('role', ['QA_TESTER', 'QA_LEAD']);
+        qaEmails = (data || []) as { email: string; role: string }[];
+      } else {
+        // QA_LEAD: QA_TESTERs de sus proyectos
+        const projectIds = userProjects.map(p => p.id);
+        if (projectIds.length === 0) { setLoading(false); return; }
+        const { data: assignments } = await supabase
+          .from('user_projects')
+          .select('profiles(email, role)')
+          .in('project_id', projectIds);
+        const seen = new Set<string>();
+        for (const a of (assignments || []) as any[]) {
+          const e = a.profiles?.email;
+          const r = a.profiles?.role;
+          if (e && r === 'QA_TESTER' && !seen.has(e)) {
+            seen.add(e);
+            qaEmails.push({ email: e, role: r });
+          }
+        }
+      }
 
-      // Get matrix counts per QA per project
-      const memberList: QAMember[] = [];
-      for (const a of qaAssignments as any[]) {
-        const email = a.profiles?.email || '';
-        const role  = a.profiles?.role  || 'QA_TESTER';
-        const { count } = await supabase
-          .from('personal_matrix_folders')
-          .select('*', { count: 'exact', head: true })
-          .eq('qa_email', email);
+      if (qaEmails.length === 0) { setLoading(false); return; }
 
-        memberList.push({
-          user_id: a.user_id,
-          email,
-          project_id: a.project_id,
-          project_name: a.projects?.name || 'Desconocido',
-          matrix_count: count || 0,
-          role,
+      // 2. Load their folders + versions
+      const emails = qaEmails.map(q => q.email);
+      const { data: rawFolders } = await supabase
+        .from('personal_matrix_folders')
+        .select('qa_email, id, ticket_id, project_name, personal_matrix_versions(id, version_num, stage, matrix_type, public_uuid)')
+        .in('qa_email', emails)
+        .order('created_at', { ascending: false });
+
+      // 3. Build member list grouped by email
+      const foldersByEmail: Record<string, MatrixFolder[]> = {};
+      for (const f of (rawFolders || []) as any[]) {
+        if (!foldersByEmail[f.qa_email]) foldersByEmail[f.qa_email] = [];
+        foldersByEmail[f.qa_email].push({
+          id: f.id,
+          ticket_id: f.ticket_id,
+          project_name: f.project_name,
+          versions: [...(f.personal_matrix_versions || [])].sort(
+            (a: any, b: any) => b.version_num - a.version_num
+          ),
         });
       }
 
-      setMembers(memberList);
+      setMembers(
+        qaEmails.map(q => ({
+          email: q.email,
+          role: q.role,
+          folders: foldersByEmail[q.email] || [],
+        }))
+      );
       setLoading(false);
     }
     load();
-  }, []);
+  }, [isAdmin, userProjects]);
 
-  // Unique projects for filter
-  const projectNames = ['ALL', ...Array.from(new Set(members.map(m => m.project_name)))];
+  // Unique project names across all members for filter
+  const allProjectNames = Array.from(
+    new Set(members.flatMap(m => m.folders.map(f => f.project_name)))
+  );
+  const projectOptions = ['ALL', ...allProjectNames];
 
-  // Filter members
+  // Filter members whose folders match the project filter
   const filtered = members.filter(m => {
-    const matchProject = filterProject === 'ALL' || m.project_name === filterProject;
     const matchEmail = !filterEmail || m.email.toLowerCase().includes(filterEmail.toLowerCase());
-    return matchProject && matchEmail;
+    const matchProject = filterProject === 'ALL' || m.folders.some(f => f.project_name === filterProject);
+    return matchEmail && matchProject;
   });
 
-  // Group by project
-  const grouped = filtered.reduce((acc, m) => {
-    if (!acc[m.project_name]) acc[m.project_name] = [];
-    acc[m.project_name].push(m);
-    return acc;
-  }, {} as Record<string, QAMember[]>);
+  const toggleEmail = (email: string) => {
+    setExpandedEmail(prev => {
+      const next = new Set(prev);
+      if (next.has(email)) next.delete(email); else next.add(email);
+      return next;
+    });
+  };
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mt-8">
       <div className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
         <h2 className="text-lg font-bold text-gray-900 flex items-center">
           <Users className="w-5 h-5 mr-2 text-blue-600" />
-          Equipo QA por Proyecto
+          Equipo QA — Matrices
         </h2>
-        <span className="text-xs text-gray-400">{members.length} QAs totales</span>
+        <span className="text-xs text-gray-400">{members.length} miembros</span>
       </div>
 
       {/* Filters */}
@@ -100,7 +144,7 @@ function QATeamSection() {
             onChange={e => setFilterProject(e.target.value)}
             className="text-sm border border-gray-200 rounded-lg px-2 py-1 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
           >
-            {projectNames.map(p => (
+            {projectOptions.map(p => (
               <option key={p} value={p}>{p === 'ALL' ? 'Todos' : p}</option>
             ))}
           </select>
@@ -125,62 +169,86 @@ function QATeamSection() {
         )}
       </div>
 
-      <div className="p-6 space-y-4">
+      <div className="p-6 space-y-3">
         {loading ? (
-          <p className="text-sm text-gray-400">Cargando equipo QA...</p>
-        ) : Object.keys(grouped).length === 0 ? (
+          <div className="flex items-center gap-3 text-gray-400 py-4 justify-center">
+            <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            Cargando equipo QA…
+          </div>
+        ) : filtered.length === 0 ? (
           <p className="text-sm text-gray-400">
             {members.length === 0
               ? 'No hay QAs asignados aún. Créalos en Configuración → Gestión de Usuarios.'
               : 'No hay resultados con los filtros actuales.'}
           </p>
         ) : (
-          Object.entries(grouped).map(([projectName, projectMembers]) => {
-            const isCollapsed = collapsed[projectName];
+          filtered.map(member => {
+            const isOpen = expandedEmail.has(member.email);
+            const visibleFolders = filterProject === 'ALL'
+              ? member.folders
+              : member.folders.filter(f => f.project_name === filterProject);
+            const totalVersions = visibleFolders.reduce((s, f) => s + f.versions.length, 0);
+
             return (
-              <div key={projectName} className="border border-gray-200 rounded-lg overflow-hidden">
+              <div key={member.email} className="border border-gray-200 rounded-xl overflow-hidden">
+                {/* Member header */}
                 <button
-                  onClick={() => setCollapsed(c => ({ ...c, [projectName]: !c[projectName] }))}
-                  className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors"
+                  onClick={() => toggleEmail(member.email)}
+                  className="w-full flex items-center justify-between px-5 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
                 >
                   <div className="flex items-center gap-3">
-                    <span className="font-bold text-gray-800 text-sm">{projectName}</span>
-                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-semibold">
-                      {projectMembers.length} QA{projectMembers.length !== 1 ? 's' : ''}
+                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                      <span className="text-xs font-bold text-blue-600">
+                        {member.email.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                    <span className="text-sm font-semibold text-gray-800">{member.email}</span>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${
+                      member.role === 'QA_LEAD'
+                        ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
+                        : 'bg-blue-50 text-blue-600 border-blue-200'
+                    }`}>
+                      {member.role === 'QA_LEAD' ? 'Lead' : 'Tester'}
+                    </span>
+                    <span className="text-xs text-gray-400 bg-white border border-gray-200 px-2 py-0.5 rounded-full">
+                      {visibleFolders.length} ticket{visibleFolders.length !== 1 ? 's' : ''} · {totalVersions} {totalVersions === 1 ? 'matriz' : 'matrices'}
                     </span>
                   </div>
-                  {isCollapsed
-                    ? <ChevronDown className="w-4 h-4 text-gray-400" />
-                    : <ChevronUp className="w-4 h-4 text-gray-400" />}
+                  <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`} />
                 </button>
 
-                {!isCollapsed && (
+                {/* Expanded: folders + UUID links */}
+                {isOpen && (
                   <div className="divide-y divide-gray-100">
-                    {projectMembers.map(m => (
-                      <div key={m.user_id + m.project_id}
-                          className="flex items-center justify-between px-4 py-3 bg-white hover:bg-gray-50 transition-colors">
-                          <div className="flex items-center gap-3">
-                            <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center">
-                              <span className="text-xs font-bold text-blue-600">
-                                {m.email.charAt(0).toUpperCase()}
-                              </span>
-                            </div>
-                            <span className="text-sm text-gray-700">{m.email}</span>
-                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${
-                              m.role === 'QA_LEAD'
-                                ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
-                                : 'bg-blue-50 text-blue-600 border-blue-200'
-                            }`}>
-                              {m.role === 'QA_LEAD' ? 'Lead' : 'Tester'}
-                            </span>
+                    {visibleFolders.length === 0 ? (
+                      <p className="px-5 py-3 text-sm text-gray-400 italic">Sin matrices publicadas.</p>
+                    ) : (
+                      visibleFolders.map(folder => (
+                        <div key={folder.id} className="px-5 py-3 bg-white">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-xs font-bold text-gray-700">{folder.ticket_id}</span>
+                            <span className="text-xs text-gray-400">— {folder.project_name}</span>
                           </div>
-                          <div className="flex items-center gap-3">
-                            <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full">
-                              {m.matrix_count} {m.matrix_count === 1 ? 'matriz' : 'matrices'}
-                            </span>
+                          <div className="flex flex-wrap gap-2">
+                            {folder.versions.map(v => (
+                              <a
+                                key={v.id}
+                                href={`${window.location.origin}/#/m/${v.public_uuid}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors bg-gray-50 hover:bg-blue-50 border-gray-200 hover:border-blue-300 text-gray-600 hover:text-blue-700"
+                              >
+                                <span className={`inline-block w-2 h-2 rounded-full ${
+                                  v.stage === 'PRE-DEV' ? 'bg-amber-400' : 'bg-green-400'
+                                }`} />
+                                v{v.version_num} · {v.stage} · {v.matrix_type}
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
+                            ))}
                           </div>
                         </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 )}
               </div>
@@ -195,7 +263,7 @@ function QATeamSection() {
 // ── Dashboard principal ───────────────────────────────────────────────────────
 
 export default function Dashboard() {
-  const { selectedProject, profile } = useAuth();
+  const { selectedProject, profile, userProjects } = useAuth();
   const canSeeTeam = ['ADMIN', 'QA_LEAD'].includes(profile?.role ?? '');
 
   const [stats, setStats] = useState({
@@ -373,7 +441,12 @@ export default function Dashboard() {
       </div>
 
       {/* QA Team Section — para ADMIN y QA_LEAD */}
-      {canSeeTeam && <QATeamSection />}
+      {canSeeTeam && (
+        <QATeamSection
+          role={profile?.role ?? ''}
+          userProjects={userProjects}
+        />
+      )}
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase/client';
 import {
   FolderOpen, Search, FlaskConical, ChevronDown,
-  ExternalLink, ChevronLeft, ChevronRight, Trash2, Pencil, Users
+  ExternalLink, ChevronLeft, ChevronRight, Trash2, Pencil
 } from 'lucide-react';
 import {
   deletePersonalMatrixVersion,
@@ -31,11 +31,6 @@ type Folder = {
   personal_matrix_versions: MatrixVersion[];
 };
 
-type TeamFolder = {
-  qa_email: string;
-  folders: Folder[];
-};
-
 function stageBadge(stage: string) {
   if (stage === 'PRE-DEV') return 'bg-amber-100 text-amber-700 border border-amber-200';
   return 'bg-green-100 text-green-700 border border-green-200';
@@ -60,7 +55,7 @@ function formatDateTime(dateStr: string) {
 }
 
 export default function MySpace() {
-  const { user, profile, userProjects } = useAuth();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
   const [folders, setFolders] = useState<Folder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,16 +64,6 @@ export default function MySpace() {
   const [expandedTickets, setExpandedTickets] = useState<Set<string>>(new Set());
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // ── Team matrices (ADMIN y QA_LEAD) ─────────────────────────────────────────
-  const isAdmin = profile?.role === 'ADMIN';
-  const isLead  = profile?.role === 'QA_LEAD';
-  const canSeeTeam = isAdmin || isLead;
-
-  const [teamFolders, setTeamFolders] = useState<TeamFolder[]>([]);
-  const [teamLoading, setTeamLoading] = useState(false);
-  const [expandedQA, setExpandedQA] = useState<Set<string>>(new Set());
-
-  // Load own folders
   useEffect(() => {
     if (!user?.email) return;
     async function loadFolders() {
@@ -101,69 +86,6 @@ export default function MySpace() {
     }
     loadFolders();
   }, [user?.email]);
-
-  // Load team folders (ADMIN o QA_LEAD)
-  useEffect(() => {
-    if (!canSeeTeam || !user?.email) return;
-    async function loadTeam() {
-      setTeamLoading(true);
-      let qaEmails: string[] = [];
-
-      if (isAdmin) {
-        // ADMIN: todos los QA_TESTER y QA_LEAD excepto uno mismo
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('email, role')
-          .in('role', ['QA_TESTER', 'QA_LEAD']);
-        qaEmails = (profiles || [])
-          .map((p: any) => p.email)
-          .filter((e: string) => e && e !== user!.email);
-      } else {
-        // QA_LEAD: QA_TESTERs asignados a sus proyectos
-        const projectIds = (userProjects || []).map(p => p.id);
-        if (projectIds.length === 0) { setTeamLoading(false); return; }
-
-        const { data: assignments } = await supabase
-          .from('user_projects')
-          .select('user_id, profiles(email, role)')
-          .in('project_id', projectIds);
-
-        const emails = (assignments || [])
-          .filter((a: any) => a.profiles?.role === 'QA_TESTER')
-          .map((a: any) => a.profiles?.email)
-          .filter(Boolean) as string[];
-
-        qaEmails = [...new Set(emails)].filter(e => e !== user!.email);
-      }
-
-      if (qaEmails.length === 0) { setTeamLoading(false); return; }
-
-      // Load folders for those QAs
-      const { data: rawFolders } = await supabase
-        .from('personal_matrix_folders')
-        .select('qa_email, id, ticket_id, project_name, created_at, personal_matrix_versions(id, version_num, stage, matrix_type, public_uuid, created_at)')
-        .in('qa_email', qaEmails)
-        .order('created_at', { ascending: false });
-
-      // Group by qa_email
-      const grouped = (rawFolders || []).reduce((acc: Record<string, any[]>, f: any) => {
-        if (!acc[f.qa_email]) acc[f.qa_email] = [];
-        acc[f.qa_email].push({
-          ...f,
-          personal_matrix_versions: [...(f.personal_matrix_versions || [])].sort(
-            (a: any, b: any) => b.version_num - a.version_num
-          ),
-        });
-        return acc;
-      }, {});
-
-      setTeamFolders(
-        Object.entries(grouped).map(([qa_email, folders]) => ({ qa_email, folders: folders as Folder[] }))
-      );
-      setTeamLoading(false);
-    }
-    loadTeam();
-  }, [canSeeTeam, isAdmin, isLead, user?.email, userProjects]);
 
   // Reset page when search changes
   useEffect(() => { setPage(1); }, [search]);
@@ -459,103 +381,6 @@ export default function MySpace() {
              </div>
           )}
         </>
-      )}
-
-      {/* ── Sección Equipo QA (ADMIN / QA_LEAD) ──────────────────────────── */}
-      {canSeeTeam && (
-        <div className="mt-10">
-          <div className="flex items-center gap-2 mb-4">
-            <Users className="w-5 h-5 text-blue-600" />
-            <h2 className="text-lg font-bold text-gray-900">
-              {isAdmin ? 'Matrices del Equipo' : 'Matrices de mis QAs'}
-            </h2>
-            {!teamLoading && (
-              <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
-                {teamFolders.length} QA{teamFolders.length !== 1 ? 's' : ''}
-              </span>
-            )}
-          </div>
-
-          {teamLoading ? (
-            <div className="flex items-center gap-3 text-gray-400 py-8 justify-center">
-              <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-              Cargando matrices del equipo…
-            </div>
-          ) : teamFolders.length === 0 ? (
-            <p className="text-sm text-gray-400 italic py-4">
-              {isAdmin
-                ? 'No hay matrices publicadas por el equipo aún.'
-                : 'No hay matrices publicadas por los testers de tus proyectos aún.'}
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {teamFolders.map(({ qa_email, folders: qaFolders }) => {
-                const isOpen = expandedQA.has(qa_email);
-                const totalVersions = qaFolders.reduce(
-                  (sum, f) => sum + (f.personal_matrix_versions?.length ?? 0), 0
-                );
-                return (
-                  <div key={qa_email} className="border border-gray-200 rounded-xl overflow-hidden">
-                    {/* QA header */}
-                    <button
-                      onClick={() => setExpandedQA(prev => {
-                        const next = new Set(prev);
-                        if (next.has(qa_email)) next.delete(qa_email); else next.add(qa_email);
-                        return next;
-                      })}
-                      className="w-full flex items-center justify-between px-5 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center">
-                          <span className="text-xs font-bold text-blue-600">
-                            {qa_email.charAt(0).toUpperCase()}
-                          </span>
-                        </div>
-                        <span className="text-sm font-semibold text-gray-800">{qa_email}</span>
-                        <span className="text-xs text-gray-500 bg-white border border-gray-200 px-2 py-0.5 rounded-full">
-                          {qaFolders.length} ticket{qaFolders.length !== 1 ? 's' : ''} · {totalVersions} {totalVersions === 1 ? 'matriz' : 'matrices'}
-                        </span>
-                      </div>
-                      <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
-                    </button>
-
-                    {/* QA folders list */}
-                    {isOpen && (
-                      <div className="divide-y divide-gray-100">
-                        {qaFolders.map(folder => (
-                          <div key={folder.id} className="px-5 py-3 bg-white">
-                            <div className="flex items-center gap-2 mb-2">
-                              <span className="text-xs font-bold text-gray-700">{folder.ticket_id}</span>
-                              <span className="text-xs text-gray-400">— {folder.project_name}</span>
-                            </div>
-                            {/* Mini-list of UUID links */}
-                            <div className="flex flex-wrap gap-2">
-                              {(folder.personal_matrix_versions ?? []).map(v => (
-                                <a
-                                  key={v.id}
-                                  href={`${window.location.origin}/#/m/${v.public_uuid}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors bg-gray-50 hover:bg-blue-50 border-gray-200 hover:border-blue-300 text-gray-600 hover:text-blue-700"
-                                >
-                                  <span className={`inline-block w-2 h-2 rounded-full ${
-                                    v.stage === 'PRE-DEV' ? 'bg-amber-400' : 'bg-green-400'
-                                  }`} />
-                                  v{v.version_num} · {v.stage} · {v.matrix_type}
-                                  <ExternalLink className="w-3 h-3" />
-                                </a>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
       )}
     </div>
   );
