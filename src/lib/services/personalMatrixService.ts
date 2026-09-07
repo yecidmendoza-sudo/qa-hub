@@ -88,12 +88,32 @@ export type MatrixRow = {
   cells: Record<string, string>;
 };
 
-export type MatrixData = {
+/**
+ * Una sección representa un bloque de tabla del markdown.
+ * El título proviene del heading (## / ###) inmediatamente anterior a la tabla.
+ */
+export type MatrixSection = {
+  id: string;
+  title: string;
   columns: MatrixCol[];
   rows: MatrixRow[];
 };
 
-// Mapea valores de status con emojis a strings limpios
+/**
+ * MatrixData soporta múltiples secciones.
+ * `sections` es el formato nuevo (multi-tabla).
+ * `columns` / `rows` son legacy (v1) — normalizar con normalizeSections().
+ */
+export type MatrixData = {
+  sections?: MatrixSection[];
+  // Legacy single-table format (backward compat)
+  columns?: MatrixCol[];
+  rows?: MatrixRow[];
+};
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+/** Mapea valores de status con emojis/texto a strings limpios */
 function cleanStatusValue(val: string): string {
   const v = val.trim();
   if (v.includes('PASS') || v === '✅') return 'PASS';
@@ -102,69 +122,138 @@ function cleanStatusValue(val: string): string {
   return 'PENDING';
 }
 
+const STATUS_COL_NAMES = new Set(['estado', 'status', 'state']);
+
 /**
- * Parsea el content_md de una versión personal en MatrixData.
- * Busca la primera tabla Markdown del contenido.
+ * Normaliza cualquier formato de MatrixData al array de secciones.
+ * Backward compat: si el JSONB tiene { columns, rows } (formato viejo),
+ * lo envuelve en una sección sin título.
+ */
+export function normalizeSections(data: MatrixData): MatrixSection[] {
+  if (data.sections && data.sections.length > 0) {
+    return data.sections;
+  }
+  // Legacy format: wrap in a single nameless section
+  if (data.columns && data.rows) {
+    return [
+      {
+        id: 'section_0',
+        title: '',
+        columns: data.columns,
+        rows: data.rows,
+      },
+    ];
+  }
+  return [];
+}
+
+/**
+ * Parsea content_md extrayendo TODAS las tablas como secciones.
+ * Asocia cada tabla con el heading (## / ###) inmediatamente anterior.
+ * No hace `break` en el primer salto — extrae el markdown completo.
  */
 export const parseMarkdownToMatrixData = (contentMd: string): MatrixData => {
   const lines = contentMd.split('\n');
-  const tableLines: string[] = [];
+  const sections: MatrixSection[] = [];
+  let currentHeading = '';
+  let tableBuffer: string[] = [];
   let inTable = false;
+
+  const flushTable = (heading: string, buf: string[]) => {
+    if (buf.length < 2) return;
+
+    // Row 0: headers
+    const headerCells = buf[0].split('|').map(s => s.trim()).filter(Boolean);
+    const columns: MatrixCol[] = headerCells.map((name, i) => ({
+      id: `col_${i}`,
+      name,
+      type: STATUS_COL_NAMES.has(name.toLowerCase()) ? 'status' : 'text',
+    }));
+
+    // Row 1: separator — skip; Rows 2+: data
+    const rows: MatrixRow[] = [];
+    for (let ri = 2; ri < buf.length; ri++) {
+      const cells = buf[ri].split('|').map(s => s.trim()).filter(s => s !== '');
+      const rowCells: Record<string, string> = {};
+      columns.forEach((col, ci) => {
+        let val = cells[ci] ?? '';
+        if (col.type === 'status') val = cleanStatusValue(val);
+        rowCells[col.id] = val;
+      });
+      rows.push({ id: `row_${ri - 2}`, cells: rowCells });
+    }
+
+    sections.push({
+      id: `section_${sections.length}`,
+      title: heading,
+      columns,
+      rows,
+    });
+  };
 
   for (const line of lines) {
     const trimmed = line.trim();
+
+    // Detect heading (only outside a table)
+    if (!inTable && /^#{2,3}\s+/.test(trimmed)) {
+      currentHeading = trimmed.replace(/^#{2,3}\s+/, '').trim();
+      continue;
+    }
+
     if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
       inTable = true;
-      tableLines.push(trimmed);
+      tableBuffer.push(trimmed);
     } else if (inTable) {
-      break;
+      // End of current table block — flush it
+      flushTable(currentHeading, tableBuffer);
+      tableBuffer = [];
+      inTable = false;
+      currentHeading = '';
     }
   }
-
-  if (tableLines.length < 2) {
-    return { columns: [{ id: 'col_0', name: 'Descripción', type: 'text' }], rows: [] };
+  // Flush last table if file ends while still in a table
+  if (inTable && tableBuffer.length > 0) {
+    flushTable(currentHeading, tableBuffer);
   }
 
-  // Parse headers (skip leading/trailing |)
-  const headerLine = tableLines[0];
-  const headerCells = headerLine.split('|').map(s => s.trim()).filter(Boolean);
-  const columns: MatrixCol[] = headerCells.map((name, i) => {
-    const nameLower = name.toLowerCase();
-    const isStatus = nameLower === 'estado' || nameLower === 'status' || nameLower === 'state';
+  if (sections.length === 0) {
     return {
-      id: `col_${i}`,
-      name,
-      type: isStatus ? 'status' : 'text',
+      sections: [
+        {
+          id: 'section_0',
+          title: '',
+          columns: [{ id: 'col_0', name: 'Descripción', type: 'text' }],
+          rows: [],
+        },
+      ],
     };
-  });
-
-  // Skip separator line (index 1), parse data rows
-  const rows: MatrixRow[] = [];
-  for (let i = 2; i < tableLines.length; i++) {
-    const cells = tableLines[i].split('|').map(s => s.trim()).filter(Boolean);
-    const rowCells: Record<string, string> = {};
-    columns.forEach((col, ci) => {
-      let val = cells[ci] ?? '';
-      if (col.type === 'status') val = cleanStatusValue(val);
-      rowCells[col.id] = val;
-    });
-    rows.push({ id: `row_${i - 2}`, cells: rowCells });
   }
 
-  return { columns, rows };
+  return { sections };
 };
 
 /**
- * Serializa MatrixData a Markdown para mantener content_md sincronizado.
+ * Serializa MatrixData (multi-sección) a Markdown para mantener content_md sincronizado.
  */
-export const serializeMatrixDataToMarkdown = (data: MatrixData, ticketId: string): string => {
-  const header = `# Matriz — ${ticketId}`;
-  const colHeader = `| ${data.columns.map(c => c.name).join(' | ')} |`;
-  const colSep = `| ${data.columns.map(() => '---').join(' | ')} |`;
-  const rowLines = data.rows.map(row =>
-    `| ${data.columns.map(col => row.cells[col.id] ?? '').join(' | ')} |`
-  );
-  return [header, '', colHeader, colSep, ...rowLines].join('\n');
+export const serializeMatrixDataToMarkdown = (
+  sections: MatrixSection[],
+  ticketId: string
+): string => {
+  const parts: string[] = [`# Matriz — ${ticketId}`, ''];
+
+  for (const sec of sections) {
+    if (sec.title) {
+      parts.push(`### ${sec.title}`, '');
+    }
+    parts.push(`| ${sec.columns.map(c => c.name).join(' | ')} |`);
+    parts.push(`| ${sec.columns.map(() => '---').join(' | ')} |`);
+    for (const row of sec.rows) {
+      parts.push(`| ${sec.columns.map(col => row.cells[col.id] ?? '').join(' | ')} |`);
+    }
+    parts.push('');
+  }
+
+  return parts.join('\n').trim();
 };
 
 /**
@@ -172,13 +261,17 @@ export const serializeMatrixDataToMarkdown = (data: MatrixData, ticketId: string
  */
 export const updatePersonalMatrixData = async (
   versionId: string,
-  matrixData: MatrixData,
+  sections: MatrixSection[],
   ticketId: string
 ): Promise<void> => {
-  const contentMd = serializeMatrixDataToMarkdown(matrixData, ticketId);
+  const matrixData: MatrixData = { sections };
+  const contentMd = serializeMatrixDataToMarkdown(sections, ticketId);
   const { error } = await supabase
     .from('personal_matrix_versions')
-    .update({ matrix_data: matrixData as unknown as Record<string, unknown>, content_md: contentMd })
+    .update({
+      matrix_data: matrixData as unknown as Record<string, unknown>,
+      content_md: contentMd,
+    })
     .eq('id', versionId);
   if (error) throw error;
 };
@@ -195,3 +288,5 @@ export const getPersonalMatrixVersion = async (versionId: string) => {
   if (error) throw error;
   return data;
 };
+
+

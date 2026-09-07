@@ -32,7 +32,103 @@ interface SaveMatrixPayload {
   notes?: string | null;
 }
 
+// ── Multi-section Markdown Parser ──────────────────────────────────────────
+
+interface MatrixCol {
+  id: string;
+  name: string;
+  type: "text" | "status";
+}
+
+interface MatrixRow {
+  id: string;
+  cells: Record<string, string>;
+}
+
+interface MatrixSection {
+  id: string;
+  title: string;
+  columns: MatrixCol[];
+  rows: MatrixRow[];
+}
+
+const STATUS_COL_NAMES = new Set(["estado", "status", "state"]);
+
+function cleanStatusValue(val: string): string {
+  const v = val.trim();
+  if (v.includes("PASS") || v === "✅") return "PASS";
+  if (v.includes("FAIL") || v === "❌") return "FAIL";
+  if (v.includes("BLOCKED") || v === "🚫") return "BLOCKED";
+  return "PENDING";
+}
+
+/**
+ * Parses ALL markdown tables into sections.
+ * Associates each table with the nearest preceding ## / ### heading.
+ * Does NOT stop at the first non-pipe line.
+ */
+function parseMarkdownToSections(contentMd: string): { sections: MatrixSection[] } {
+  const lines = contentMd.split("\n");
+  const sections: MatrixSection[] = [];
+  let currentHeading = "";
+  let tableBuffer: string[] = [];
+  let inTable = false;
+
+  const flushTable = (heading: string, buf: string[]) => {
+    if (buf.length < 2) return;
+    const headerCells = buf[0].split("|").map((s) => s.trim()).filter(Boolean);
+    const columns: MatrixCol[] = headerCells.map((name, i) => ({
+      id: `col_${i}`,
+      name,
+      type: STATUS_COL_NAMES.has(name.toLowerCase()) ? "status" : "text",
+    }));
+    const rows: MatrixRow[] = [];
+    for (let ri = 2; ri < buf.length; ri++) {
+      const cells = buf[ri].split("|").map((s) => s.trim()).filter((s) => s !== "");
+      const rowCells: Record<string, string> = {};
+      columns.forEach((col, ci) => {
+        let val = cells[ci] ?? "";
+        if (col.type === "status") val = cleanStatusValue(val);
+        rowCells[col.id] = val;
+      });
+      rows.push({ id: `row_${ri - 2}`, cells: rowCells });
+    }
+    sections.push({ id: `section_${sections.length}`, title: heading, columns, rows });
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!inTable && /^#{2,3}\s+/.test(trimmed)) {
+      currentHeading = trimmed.replace(/^#{2,3}\s+/, "").trim();
+      continue;
+    }
+    if (trimmed.startsWith("|") && trimmed.endsWith("|")) {
+      inTable = true;
+      tableBuffer.push(trimmed);
+    } else if (inTable) {
+      flushTable(currentHeading, tableBuffer);
+      tableBuffer = [];
+      inTable = false;
+      currentHeading = "";
+    }
+  }
+  if (inTable && tableBuffer.length > 0) flushTable(currentHeading, tableBuffer);
+
+  if (sections.length === 0) {
+    return {
+      sections: [{
+        id: "section_0",
+        title: "",
+        columns: [{ id: "col_0", name: "Descripción", type: "text" }],
+        rows: [],
+      }],
+    };
+  }
+  return { sections };
+}
+
 // ── Handler ────────────────────────────────────────────────────────────────
+
 
 Deno.serve(async (req: Request): Promise<Response> => {
   // Handle CORS preflight
@@ -187,6 +283,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const versionNum = (count ?? 0) + 1;
 
     // ── 4. Insert version ─────────────────────────────────────────────────
+    const matrixData = parseMarkdownToSections(content_md);
+
     const { data: inserted, error: insertError } = await supabase
       .from("personal_matrix_versions")
       .insert({
@@ -195,6 +293,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         stage,
         matrix_type,
         content_md,
+        matrix_data: matrixData,
         fixtures_json,
         notes,
       })
