@@ -10,7 +10,19 @@ export const fetchMatrix = async (cycleId: string) => {
       .eq('cycle_id', cycleId)
       .order('created_at', { ascending: true }),
   ]);
-  return { cycle, cases: cases || [] };
+
+  // PostgREST returns `executions` as an object (not array) when there is a
+  // UNIQUE constraint on case_id. Normalize to always be an array.
+  const normalizedCases = (cases || []).map((c: any) => ({
+    ...c,
+    executions: c.executions
+      ? Array.isArray(c.executions)
+        ? c.executions
+        : [c.executions]
+      : [],
+  }));
+
+  return { cycle, cases: normalizedCases };
 };
 
 export const addCustomColumn = async (
