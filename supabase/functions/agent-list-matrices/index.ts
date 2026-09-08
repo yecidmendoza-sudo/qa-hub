@@ -208,12 +208,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // ── 4. Fetch Mi Espacio matrices for this QA ─────────────────────────────
     const mySpace: MySpaceEntry[] = [];
 
-    const { data: folders } = await supabase
+    const { data: folders, error: foldersError } = await supabase
       .from("personal_matrix_folders")
       .select("ticket_id, personal_matrix_versions(version_num, stage, matrix_data, public_uuid, updated_at)")
       .eq("qa_email", qa_email)
-      .order("updated_at", { ascending: false, referencedTable: "personal_matrix_versions" })
+      .order("created_at", { ascending: false })
       .limit(15);
+
+    if (foldersError) {
+      console.error("personal_matrix_folders error:", foldersError.message);
+    }
 
     for (const folder of folders ?? []) {
       const versions = (folder as any).personal_matrix_versions ?? [];
