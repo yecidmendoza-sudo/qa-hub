@@ -197,18 +197,18 @@ export default function Matrix() {
       <div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-x-auto pb-32">
         <table className="min-w-full text-left border-collapse">
           <thead>
-            <tr className="bg-blue-50 border-b border-blue-100 sticky top-0 z-20 shadow-sm">
-              <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[60px]">#</th>
-              <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[90px]">Ticket</th>
-              <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[200px]">Task Name</th>
-              <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[130px]">Módulo / Vía</th>
-              <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[180px] border-l border-blue-100">Expected Result</th>
+            <tr className="border-b border-blue-100">
+              <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[60px] sticky top-0 z-20 bg-blue-50">#</th>
+              <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[90px] sticky top-0 z-20 bg-blue-50">Ticket</th>
+              <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[200px] sticky top-0 z-20 bg-blue-50">Task Name</th>
+              <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[130px] sticky top-0 z-20 bg-blue-50">Módulo / Vía</th>
+              <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[180px] border-l border-blue-100 sticky top-0 z-20 bg-blue-50">Expected Result</th>
 
               {/* All custom columns from DB — fully data-driven, zero hardcoding */}
               {customCols.map((col: any) => (
                 <th
                   key={col.id || col.name}
-                  className="px-3 py-3 text-xs font-bold text-indigo-900 uppercase min-w-[160px] bg-indigo-50 border-l border-indigo-100 group"
+                  className="px-3 py-3 text-xs font-bold text-indigo-900 uppercase min-w-[160px] bg-indigo-50 border-l border-indigo-100 group sticky top-0 z-20"
                 >
                   <div className="flex items-center justify-between">
                     <span>{col.name}</span>
@@ -225,8 +225,8 @@ export default function Matrix() {
                 </th>
               ))}
 
-              <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[180px] border-l border-blue-100">Observación</th>
-              <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[140px] sticky right-0 bg-blue-50 border-l border-blue-200 shadow-l">
+              <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[180px] border-l border-blue-100 sticky top-0 z-20 bg-blue-50">Observación</th>
+              <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[140px] sticky top-0 right-0 z-30 bg-blue-50 border-l border-blue-200 shadow-l">
                 Estado
               </th>
             </tr>

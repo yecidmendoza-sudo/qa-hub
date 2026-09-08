@@ -18,12 +18,36 @@ export default function TextCellPopover({
 }: TextCellPopoverProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [draft, setDraft] = useState(value);
+  const [popoverStyle, setPopoverStyle] = useState<React.CSSProperties>({});
   const popoverRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Sync draft when value changes externally
   useEffect(() => { setDraft(value); }, [value]);
+
+  // Calculate fixed position from trigger rect so overflow-hidden never clips it
+  useEffect(() => {
+    if (!isOpen || !triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const popoverWidth = 320;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    let left = rect.left;
+    // Flip left if it would go off-screen to the right
+    if (left + popoverWidth > viewportWidth - 12) {
+      left = Math.max(8, rect.right - popoverWidth);
+    }
+
+    let top = rect.bottom + 4;
+    // Flip above if not enough space below (280px estimated popover height)
+    if (top + 280 > viewportHeight - 12) {
+      top = Math.max(8, rect.top - 284);
+    }
+
+    setPopoverStyle({ position: 'fixed', top, left, width: popoverWidth, zIndex: 9999 });
+  }, [isOpen]);
 
   // Close on outside click
   useEffect(() => {
@@ -40,6 +64,14 @@ export default function TextCellPopover({
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [isOpen, value]);
+
+  // Close on scroll (position would be stale)
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = () => setIsOpen(false);
+    window.addEventListener('scroll', handler, true);
+    return () => window.removeEventListener('scroll', handler, true);
+  }, [isOpen]);
 
   // Auto-focus textarea when popover opens
   useEffect(() => {
@@ -85,12 +117,12 @@ export default function TextCellPopover({
         {preview || <span className="text-gray-400 italic">{placeholder}</span>}
       </button>
 
-      {/* Popover */}
+      {/* Popover — rendered via fixed positioning to escape any overflow:hidden ancestor */}
       {isOpen && (
         <div
           ref={popoverRef}
-          className="absolute z-50 left-0 top-full mt-1 w-80 bg-white border border-indigo-200 rounded-xl shadow-xl p-3 flex flex-col gap-2"
-          style={{ minWidth: '280px' }}
+          style={popoverStyle}
+          className="bg-white border border-indigo-200 rounded-xl shadow-xl p-3 flex flex-col gap-2"
         >
           {/* Header */}
           <div className="flex items-center justify-between mb-1">
