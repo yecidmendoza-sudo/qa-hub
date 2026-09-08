@@ -22,9 +22,15 @@ export const fetchMatrix = async (cycleId: string) => {
           : [c.executions]
         : [],
     }))
-    // Sort by the numeric part of ticket_id (TC-01 < TC-02 < ... < TC-10 < TC-25)
-    // Batch inserts share the same created_at so DB ordering is non-deterministic
+    // Sort by sort_order stored in custom_data (document row position — set by agent-create-cycle).
+    // Falls back to numeric parse of ticket_id for legacy cycles without sort_order.
     .sort((a: any, b: any) => {
+      const soA = a.custom_data?.sort_order;
+      const soB = b.custom_data?.sort_order;
+      if (soA !== undefined && soB !== undefined) {
+        return parseInt(soA, 10) - parseInt(soB, 10);
+      }
+      // Legacy fallback: parse number from ticket_id (TC-01 → 1)
       const numA = parseInt((a.ticket_id ?? '').replace(/\D/g, '') || '0', 10);
       const numB = parseInt((b.ticket_id ?? '').replace(/\D/g, '') || '0', 10);
       return numA - numB;
@@ -133,6 +139,7 @@ export const addTestCase = async (cycleId: string, count: number) => {
       module: '',
       title: '',
       expected_result: '',
+      custom_data: { sort_order: String(count) },  // place at end of current list
     })
     .select()
     .single();

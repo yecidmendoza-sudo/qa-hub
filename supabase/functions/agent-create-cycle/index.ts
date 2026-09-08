@@ -201,14 +201,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const cycleId: string = cycle.id;
 
     // ── 5. Insert test cases (with custom_data for flexible columns) ───────
-    const casesToInsert = test_cases.map((tc) => ({
+    const casesToInsert = test_cases.map((tc, idx) => ({
       cycle_id: cycleId,
       ticket_id: tc.ticket_id,
       module: tc.module ?? "",
       title: tc.title,
       expected_result: tc.expected_result ?? "",
-      // Merge qa_reviewer into custom_data so it renders in the QA Reviewer column
+      // Merge qa_reviewer + sort_order into custom_data
+      // sort_order preserves exact document row order (0-indexed) for display
       custom_data: {
+        sort_order: String(idx),           // document position — used for sorting in Matrix
         ...(tc.custom_data ?? {}),
         ...(tc.qa_reviewer ? { qa_reviewer: tc.qa_reviewer } : {}),
       },
