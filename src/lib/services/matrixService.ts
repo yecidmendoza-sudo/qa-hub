@@ -13,14 +13,22 @@ export const fetchMatrix = async (cycleId: string) => {
 
   // PostgREST returns `executions` as an object (not array) when there is a
   // UNIQUE constraint on case_id. Normalize to always be an array.
-  const normalizedCases = (cases || []).map((c: any) => ({
-    ...c,
-    executions: c.executions
-      ? Array.isArray(c.executions)
-        ? c.executions
-        : [c.executions]
-      : [],
-  }));
+  const normalizedCases = (cases || [])
+    .map((c: any) => ({
+      ...c,
+      executions: c.executions
+        ? Array.isArray(c.executions)
+          ? c.executions
+          : [c.executions]
+        : [],
+    }))
+    // Sort by the numeric part of ticket_id (TC-01 < TC-02 < ... < TC-10 < TC-25)
+    // Batch inserts share the same created_at so DB ordering is non-deterministic
+    .sort((a: any, b: any) => {
+      const numA = parseInt((a.ticket_id ?? '').replace(/\D/g, '') || '0', 10);
+      const numB = parseInt((b.ticket_id ?? '').replace(/\D/g, '') || '0', 10);
+      return numA - numB;
+    });
 
   return { cycle, cases: normalizedCases };
 };
