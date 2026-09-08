@@ -23,6 +23,8 @@ interface ResultInput {
   ticket_id: string;
   status: ExecutionStatus;
   observation?: string;
+  // Optional: additional per-case data to store (e.g. qa_reviewer, actual_result)
+  custom_data?: Record<string, string>;
 }
 
 interface ReportResultsPayload {
@@ -184,7 +186,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       }
 
       if (ref.executionId) {
-        // UPDATE existing execution by its PK — no UNIQUE constraint needed
+        // UPDATE existing execution by its PK
         const { error: updateError } = await supabase
           .from("test_executions")
           .update({
@@ -213,6 +215,28 @@ Deno.serve(async (req: Request): Promise<Response> => {
           throw new Error(
             `Execution insert failed for ${result.ticket_id}: ${insertError.message}`,
           );
+        }
+      }
+
+      // ── Also update test_case.custom_data if provided (e.g. qa_reviewer) ──
+      if (result.custom_data && Object.keys(result.custom_data).length > 0) {
+        // Fetch current custom_data to merge (not overwrite)
+        const { data: caseRow } = await supabase
+          .from("test_cases")
+          .select("custom_data")
+          .eq("id", ref.caseId)
+          .single();
+
+        const merged = { ...(caseRow?.custom_data ?? {}), ...result.custom_data };
+
+        const { error: caseUpdateError } = await supabase
+          .from("test_cases")
+          .update({ custom_data: merged })
+          .eq("id", ref.caseId);
+
+        if (caseUpdateError) {
+          // Non-fatal: log but don't fail the whole request
+          console.warn(`custom_data update failed for ${result.ticket_id}: ${caseUpdateError.message}`);
         }
       }
 
