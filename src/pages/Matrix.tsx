@@ -195,20 +195,20 @@ export default function Matrix() {
 
       {/* Table */}
       <div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden overflow-x-auto pb-32">
-        <table className="w-full text-left border-collapse table-fixed">
+        <table className="min-w-full text-left border-collapse">
           <thead>
             <tr className="bg-blue-50 border-b border-blue-100">
               <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[60px]">#</th>
               <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[90px]">Ticket</th>
-              <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase w-[200px] max-w-[200px]">Task Name</th>
-              <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase w-[120px] max-w-[120px]">Módulo</th>
-              <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase w-[180px] max-w-[180px] border-l border-blue-100">Expected Result</th>
+              <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[200px]">Task Name</th>
+              <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[130px]">Módulo / Vía</th>
+              <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[180px] border-l border-blue-100">Expected Result</th>
 
               {/* All custom columns from DB — fully data-driven, zero hardcoding */}
               {customCols.map((col: any) => (
                 <th
                   key={col.id || col.name}
-                  className="px-3 py-3 text-xs font-bold text-indigo-900 uppercase w-[180px] max-w-[180px] bg-indigo-50 border-l border-indigo-100 group"
+                  className="px-3 py-3 text-xs font-bold text-indigo-900 uppercase min-w-[160px] bg-indigo-50 border-l border-indigo-100 group"
                 >
                   <div className="flex items-center justify-between">
                     <span>{col.name}</span>
@@ -267,8 +267,8 @@ export default function Matrix() {
                     </td>
 
                     {/* Task Name */}
-                    <td className="px-3 py-2 text-xs text-gray-700 w-[200px] max-w-[200px] overflow-hidden">
-                      <div className="overflow-hidden">
+                    <td className="px-3 py-2 text-xs text-gray-700 max-w-[220px]">
+                      <div className="max-w-[210px] overflow-hidden">
                         <TextCellPopover
                           value={c.title || ''}
                           onSave={val => handleCellBlur(c.id, 'title', val)}
@@ -278,18 +278,20 @@ export default function Matrix() {
                     </td>
 
                     {/* Módulo */}
-                    <td className="px-3 py-2 text-xs text-gray-600 w-[120px] max-w-[120px] overflow-hidden">
-                      <input
-                        type="text"
-                        defaultValue={c.module}
-                        onBlur={e => handleCellBlur(c.id, 'module', e.target.value)}
-                        className="w-full bg-transparent border-b border-transparent focus:border-blue-500 focus:outline-none text-xs truncate"
-                      />
+                    <td className="px-3 py-2 text-xs text-gray-600 max-w-[140px]">
+                      <div className="max-w-[130px] overflow-hidden">
+                        <input
+                          type="text"
+                          defaultValue={c.module}
+                          onBlur={e => handleCellBlur(c.id, 'module', e.target.value)}
+                          className="w-full bg-transparent border-b border-transparent focus:border-blue-500 focus:outline-none text-xs"
+                        />
+                      </div>
                     </td>
 
                     {/* Expected Result */}
-                    <td className="px-3 py-2 text-xs text-gray-600 border-l border-gray-100 w-[180px] max-w-[180px] overflow-hidden">
-                      <div className="overflow-hidden">
+                    <td className="px-3 py-2 text-xs text-gray-600 border-l border-gray-100 max-w-[200px]">
+                      <div className="max-w-[190px] overflow-hidden">
                         <TextCellPopover
                           value={c.expected_result || ''}
                           onSave={val => handleCellBlur(c.id, 'expected_result', val)}
@@ -300,8 +302,8 @@ export default function Matrix() {
 
                     {/* Custom columns — fully data-driven from cycle.custom_columns */}
                     {customCols.map((col: any) => (
-                      <td key={col.id || col.name} className="px-3 py-2 border-l border-gray-100 bg-indigo-50/20 w-[180px] max-w-[180px] overflow-hidden">
-                        <div className="overflow-hidden w-full">
+                      <td key={col.id || col.name} className="px-3 py-2 border-l border-gray-100 bg-indigo-50/20 min-w-[160px]">
+                        <div className="max-w-[200px] overflow-hidden">
                           {col.type === 'dropdown' ? (
                             <select
                               value={customData[col.id] || ''}
