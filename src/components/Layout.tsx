@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, FolderKanban, Settings, Beaker, LogOut, ChevronDown, Menu, X, FolderOpen, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { LayoutDashboard, FolderKanban, Settings, Beaker, LogOut, ChevronDown, Menu, X, FolderOpen, ChevronsLeft, ChevronsRight, BookOpen } from 'lucide-react';
 import { useAuth } from '../lib/supabase/auth';
 
 export default function Layout() {
@@ -21,10 +21,11 @@ export default function Layout() {
   const isAdminOrLead = profile?.role === 'ADMIN' || profile?.role === 'QA_LEAD';
 
   const navItems = [
-    { name: 'Dashboard',        path: '/',         icon: LayoutDashboard, show: true },
-    { name: 'Proyectos',        path: '/projects', icon: FolderKanban,    show: isAdminOrLead },
-    { name: 'Ciclos de Pruebas',path: '/cycles',   icon: Beaker,          show: true },
-    { name: 'Mi Espacio',       path: '/my-space', icon: FolderOpen,      show: true },
+    { name: 'Dashboard',         path: '/',         icon: LayoutDashboard, show: true },
+    { name: 'Proyectos',         path: '/projects', icon: FolderKanban,    show: isAdminOrLead },
+    { name: 'Ciclos de Pruebas', path: '/cycles',   icon: Beaker,          show: true },
+    { name: 'Mi Espacio',        path: '/my-space', icon: FolderOpen,      show: true },
+    { name: 'Docs & API',        path: '/docs',     icon: BookOpen,        show: true },
   ];
 
   // ── Sidebar content (shared between desktop & mobile) ─────────────────────

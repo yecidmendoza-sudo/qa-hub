@@ -14,6 +14,7 @@ import MySpaceDetail from './pages/MySpaceDetail';
 import MySpaceMatrix from './pages/MySpaceMatrix';
 
 import AcceptInvite from './pages/AcceptInvite';
+import Docs from './pages/Docs';
 
 const ProtectedRoute = ({ children }: { children: ReactElement }) => {
   const { session, loading } = useAuth();
@@ -32,6 +33,7 @@ function AppRoutes() {
       {/* Public routes — no login required */}
       <Route path="/m/:uuid" element={<MatrixPublicView />} />
       <Route path="/accept-invite" element={<AcceptInvite />} />
+      <Route path="/docs" element={<Docs />} />
 
       <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route index element={<Dashboard />} />
