@@ -31,3 +31,4 @@ dist-ssr
 # Backups generados durante el desarrollo
 src_backup_*
 test_db*.js
+supabase/.temp/
