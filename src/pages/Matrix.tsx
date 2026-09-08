@@ -17,9 +17,6 @@ import AddColumnModal from '../components/matrix/AddColumnModal';
 import CsvImporter from '../components/matrix/CsvImporter';
 import TextCellPopover from '../components/matrix/TextCellPopover';
 
-// Default QA Reviewer options when not defined in custom_columns
-const DEFAULT_QA_REVIEWER_OPTIONS = ['IA', 'Lisette', 'Fabricio', 'Raquel'];
-
 // ─── Status helpers ───────────────────────────────────────────────────────────
 
 const STATUS_SELECT_CLS: Record<string, string> = {
@@ -96,7 +93,7 @@ export default function Matrix() {
       await updateExecution(cycle, testCase, newStatus, exec?.id || null, profile.email);
     } catch (err: any) {
       console.error('Error al cambiar estado:', err.message);
-      loadMatrix(); // rollback on error
+      loadMatrix();
     }
   };
 
@@ -131,10 +128,10 @@ export default function Matrix() {
   if (loading) return <div className="p-8 text-gray-500">Cargando matriz...</div>;
   if (!cycle)  return <div className="p-8 text-gray-500">Ciclo no encontrado.</div>;
 
-  const customCols = (cycle.custom_columns || []).filter((col: any) => col.id !== 'qa_reviewer');
+  // All custom columns come from the DB — no hardcoding
+  const customCols: any[] = cycle.custom_columns || [];
   const total = cases.length;
 
-  // Stats
   const statusCounts = { PASS: 0, FAIL: 0, BLOCKED: 0, PENDING: 0 } as Record<string, number>;
   cases.forEach(c => {
     const s = c.executions?.[0]?.status || 'PENDING';
@@ -183,7 +180,6 @@ export default function Matrix() {
         <div className="w-full bg-gray-200 rounded-full h-2.5 mb-3">
           <div className="bg-blue-600 h-2.5 rounded-full transition-all duration-500" style={{ width: `${percentage}%` }} />
         </div>
-        {/* Status summary pills */}
         <div className="flex flex-wrap gap-2 text-xs">
           {Object.entries(statusCounts).map(([status, count]) => (
             <span
@@ -202,19 +198,17 @@ export default function Matrix() {
         <table className="min-w-full text-left border-collapse">
           <thead>
             <tr className="bg-blue-50 border-b border-blue-100">
-              {/* Fixed columns */}
               <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[60px]">#</th>
               <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[90px]">Ticket</th>
               <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[200px]">Task Name</th>
-              <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[130px]">Módulo / Vía</th>
-              <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[90px]">QA Reviewer</th>
+              <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[130px]">Módulo</th>
               <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[180px]">Expected Result</th>
 
-              {/* Custom columns (from extra_columns — e.g. Resultado Actual, Comentarios QA, etc.) */}
+              {/* All custom columns from DB — fully data-driven, zero hardcoding */}
               {customCols.map((col: any) => (
                 <th
                   key={col.id || col.name}
-                  className="px-3 py-3 text-xs font-bold text-indigo-900 uppercase min-w-[170px] bg-indigo-50 border-l border-indigo-100 group"
+                  className="px-3 py-3 text-xs font-bold text-indigo-900 uppercase min-w-[160px] bg-indigo-50 border-l border-indigo-100 group"
                 >
                   <div className="flex items-center justify-between">
                     <span>{col.name}</span>
@@ -232,7 +226,6 @@ export default function Matrix() {
               ))}
 
               <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[180px] border-l border-blue-100">Observación</th>
-              {/* ★ MERGED: Estado + Acción */}
               <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[140px] sticky right-0 bg-blue-50 border-l border-blue-200 shadow-l">
                 Estado
               </th>
@@ -241,7 +234,7 @@ export default function Matrix() {
           <tbody className="divide-y divide-gray-100">
             {cases.length === 0 ? (
               <tr>
-                <td colSpan={8 + customCols.length} className="px-6 py-8 text-center text-gray-400">
+                <td colSpan={6 + customCols.length} className="px-6 py-8 text-center text-gray-400">
                   No hay casos de prueba. Añade uno manualmente o importa un CSV.
                 </td>
               </tr>
@@ -292,28 +285,6 @@ export default function Matrix() {
                       />
                     </td>
 
-                    {/* QA Reviewer — dropdown, options from custom_columns or defaults */}
-                    <td className="px-3 py-2 text-xs text-gray-600">
-                      {(() => {
-                        const qaRevCol = customCols.find((col: any) => col.id === 'qa_reviewer');
-                        const options: string[] = qaRevCol?.options?.length
-                          ? qaRevCol.options
-                          : DEFAULT_QA_REVIEWER_OPTIONS;
-                        return (
-                          <select
-                            value={customData['qa_reviewer'] || ''}
-                            onChange={e => handleCustomDataChange(c.id, customData, 'qa_reviewer', e.target.value)}
-                            className="w-full text-xs bg-white border border-gray-200 rounded-md px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-400 text-gray-700"
-                          >
-                            <option value="">— Revisor —</option>
-                            {options.map((opt: string) => (
-                              <option key={opt} value={opt}>{opt}</option>
-                            ))}
-                          </select>
-                        );
-                      })()}
-                    </td>
-
                     {/* Expected Result */}
                     <td className="px-3 py-2 text-xs text-gray-600 border-l border-gray-100 max-w-[200px]">
                       <TextCellPopover
@@ -323,14 +294,14 @@ export default function Matrix() {
                       />
                     </td>
 
-                    {/* Custom columns (Resultado Actual, Comentarios QA, etc.) */}
+                    {/* Custom columns — fully data-driven from cycle.custom_columns */}
                     {customCols.map((col: any) => (
                       <td key={col.id || col.name} className="px-3 py-2 border-l border-gray-100 bg-indigo-50/20 max-w-[200px]">
                         {col.type === 'dropdown' ? (
                           <select
                             value={customData[col.id] || ''}
                             onChange={e => handleCustomDataChange(c.id, customData, col.id, e.target.value)}
-                            className="w-full text-xs bg-transparent border-b border-transparent focus:border-blue-500 focus:outline-none px-1 py-1"
+                            className="w-full text-xs bg-white border border-gray-200 rounded-md px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-400 text-gray-700"
                           >
                             <option value="">— Seleccionar —</option>
                             {col.options?.map((opt: string) => (
@@ -356,21 +327,16 @@ export default function Matrix() {
                       />
                     </td>
 
-                    {/* ★ ESTADO (merged Status + Action) — sticky right */}
-                    <td className={`px-3 py-2 whitespace-nowrap sticky right-0 border-l border-gray-200 shadow-l transition-colors ${
+                    {/* Estado — sticky, colored select (merged Status + Action) */}
+                    <td className={`px-3 py-2 whitespace-nowrap sticky right-0 border-l border-gray-200 transition-colors ${
                       currentStatus === 'PASS'    ? 'bg-green-50/80' :
                       currentStatus === 'FAIL'    ? 'bg-red-50/80' :
                       currentStatus === 'BLOCKED' ? 'bg-yellow-50/80' :
                       'bg-gray-50/80'
                     }`}>
                       <div className="flex items-center gap-1.5">
-                        {/* Colored status select */}
                         <select
-                          className={`
-                            text-xs font-semibold rounded-lg px-2 py-1.5 border cursor-pointer
-                            focus:outline-none focus:ring-2 transition-all flex-1
-                            ${STATUS_SELECT_CLS[currentStatus] || STATUS_SELECT_CLS.PENDING}
-                          `}
+                          className={`text-xs font-semibold rounded-lg px-2 py-1.5 border cursor-pointer focus:outline-none focus:ring-2 transition-all flex-1 ${STATUS_SELECT_CLS[currentStatus] || STATUS_SELECT_CLS.PENDING}`}
                           value={currentStatus}
                           onChange={e => handleStatusChange(c, e.target.value)}
                         >
@@ -379,8 +345,6 @@ export default function Matrix() {
                           <option value="FAIL">❌ FAIL</option>
                           <option value="BLOCKED">⚠️ BLOCKED</option>
                         </select>
-
-                        {/* Delete button */}
                         {canManage && (
                           <button
                             onClick={() => handleDeleteRow(c.id)}
@@ -399,7 +363,7 @@ export default function Matrix() {
 
             {/* Add Row */}
             <tr>
-              <td colSpan={8 + customCols.length} className="px-4 py-3 bg-gray-50/50">
+              <td colSpan={6 + customCols.length} className="px-4 py-3 bg-gray-50/50">
                 <button
                   onClick={handleAddRow}
                   className="w-full flex items-center justify-center py-2 text-sm font-semibold text-gray-500 hover:text-blue-600 hover:bg-blue-50 border border-dashed border-gray-300 hover:border-blue-300 rounded-lg transition-all"
