@@ -30,20 +30,19 @@ export default function TextCellPopover({
   useEffect(() => {
     if (!isOpen || !triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
-    const popoverWidth = 320;
+    const popoverWidth = 340;
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
 
     let left = rect.left;
-    // Flip left if it would go off-screen to the right
     if (left + popoverWidth > viewportWidth - 12) {
       left = Math.max(8, rect.right - popoverWidth);
     }
 
     let top = rect.bottom + 4;
-    // Flip above if not enough space below (280px estimated popover height)
-    if (top + 280 > viewportHeight - 12) {
-      top = Math.max(8, rect.top - 284);
+    // Flip above if not enough space below (360px = header + textarea max-h + footer)
+    if (top + 360 > viewportHeight - 12) {
+      top = Math.max(8, rect.top - 364);
     }
 
     setPopoverStyle({ position: 'fixed', top, left, width: popoverWidth, zIndex: 9999 });
@@ -65,10 +64,17 @@ export default function TextCellPopover({
     return () => document.removeEventListener('mousedown', handler);
   }, [isOpen, value]);
 
-  // Close on scroll (position would be stale)
+  // Close on scroll — but ONLY when the scroll happens outside the popover.
+  // Without this check, scrolling inside the textarea itself closed the popover.
   useEffect(() => {
     if (!isOpen) return;
-    const handler = () => setIsOpen(false);
+    const handler = (e: Event) => {
+      if (popoverRef.current && popoverRef.current.contains(e.target as Node)) {
+        // Scroll happened inside the popover (e.g. inside the textarea) — ignore
+        return;
+      }
+      setIsOpen(false);
+    };
     window.addEventListener('scroll', handler, true);
     return () => window.removeEventListener('scroll', handler, true);
   }, [isOpen]);
@@ -137,7 +143,7 @@ export default function TextCellPopover({
             </button>
           </div>
 
-          {/* Textarea */}
+          {/* Textarea — max-h keeps the popover in viewport; resize-y lets user expand within that limit */}
           <textarea
             ref={textareaRef}
             value={draft}
@@ -149,6 +155,7 @@ export default function TextCellPopover({
             className={`
               w-full text-sm text-gray-800 border border-gray-200 rounded-lg p-2.5
               resize-y focus:outline-none focus:ring-2 focus:ring-indigo-400 leading-relaxed
+              max-h-64 overflow-y-auto
               ${readOnly ? 'bg-gray-50 cursor-default' : 'bg-white'}
             `}
           />
