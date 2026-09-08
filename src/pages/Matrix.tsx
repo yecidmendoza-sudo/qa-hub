@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Check, X, AlertTriangle, Clock, Plus, Trash2, Settings2 } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Settings2 } from 'lucide-react';
 import { useAuth } from '../lib/supabase/auth';
 import {
   fetchMatrix,
@@ -15,22 +15,19 @@ import {
 } from '../lib/services/matrixService';
 import AddColumnModal from '../components/matrix/AddColumnModal';
 import CsvImporter from '../components/matrix/CsvImporter';
+import TextCellPopover from '../components/matrix/TextCellPopover';
 
-// ─── Status Badge ────────────────────────────────────────────────────────────
-const getStatusBadge = (status: string) => {
-  const map: Record<string, { icon: any; label: string; cls: string }> = {
-    PASS:    { icon: Check,         label: 'PASS',    cls: 'bg-green-100 text-green-800 border-green-200' },
-    FAIL:    { icon: X,             label: 'FAIL',    cls: 'bg-red-100 text-red-800 border-red-200' },
-    BLOCKED: { icon: AlertTriangle, label: 'BLOCKED', cls: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
-    PENDING: { icon: Clock,         label: 'PENDING', cls: 'bg-gray-100 text-gray-700 border-gray-200' },
-  };
-  const s = map[status] || map['PENDING'];
-  const Icon = s.icon;
-  return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border ${s.cls}`}>
-      <Icon className="w-3 h-3 mr-1" />{s.label}
-    </span>
-  );
+// ─── Status helpers ───────────────────────────────────────────────────────────
+
+const STATUS_SELECT_CLS: Record<string, string> = {
+  PASS:    'bg-green-100 text-green-800 border-green-300 focus:ring-green-400',
+  FAIL:    'bg-red-100   text-red-800   border-red-300   focus:ring-red-400',
+  BLOCKED: 'bg-yellow-100 text-yellow-800 border-yellow-300 focus:ring-yellow-400',
+  PENDING: 'bg-gray-100  text-gray-700  border-gray-300  focus:ring-gray-400',
+};
+
+const STATUS_ICON: Record<string, string> = {
+  PASS: '✅', FAIL: '❌', BLOCKED: '⚠️', PENDING: '⏳',
 };
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -85,12 +82,18 @@ export default function Matrix() {
   };
 
   const handleStatusChange = async (testCase: any, newStatus: string) => {
+    // Optimistic update
+    setCases(prev => prev.map(c =>
+      c.id === testCase.id
+        ? { ...c, executions: [{ ...(c.executions?.[0] || {}), status: newStatus }] }
+        : c
+    ));
     try {
       const exec = testCase.executions?.[0];
       await updateExecution(cycle, testCase, newStatus, exec?.id || null, profile.email);
-      loadMatrix();
     } catch (err: any) {
       console.error('Error al cambiar estado:', err.message);
+      loadMatrix(); // rollback on error
     }
   };
 
@@ -113,14 +116,6 @@ export default function Matrix() {
     }
   };
 
-  const handleObservationBlur = async (executionId: string | undefined, value: string) => {
-    try {
-      if (executionId) await updateObservation(executionId, value);
-    } catch (err: any) {
-      console.error('Error al guardar observación:', err.message);
-    }
-  };
-
   const handleCellBlur = async (caseId: string, field: string, value: string) => {
     try {
       await updateTestCaseField(caseId, field, value);
@@ -135,7 +130,14 @@ export default function Matrix() {
 
   const customCols = cycle.custom_columns || [];
   const total = cases.length;
-  const completed = cases.filter(c => ['PASS', 'FAIL'].includes(c.executions?.[0]?.status)).length;
+
+  // Stats
+  const statusCounts = { PASS: 0, FAIL: 0, BLOCKED: 0, PENDING: 0 } as Record<string, number>;
+  cases.forEach(c => {
+    const s = c.executions?.[0]?.status || 'PENDING';
+    statusCounts[s] = (statusCounts[s] || 0) + 1;
+  });
+  const completed = (statusCounts.PASS || 0) + (statusCounts.FAIL || 0);
   const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
 
   // ── Render ───────────────────────────────────────────────────────────────────
@@ -169,16 +171,27 @@ export default function Matrix() {
         )}
       </div>
 
-      {/* Progress Bar */}
+      {/* Progress + Stats */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
         <div className="flex justify-between items-center mb-2">
           <span className="text-sm font-semibold text-gray-700">Progreso del Ciclo</span>
           <span className="text-sm font-bold text-blue-600">{percentage}%</span>
         </div>
-        <div className="w-full bg-gray-200 rounded-full h-2.5">
+        <div className="w-full bg-gray-200 rounded-full h-2.5 mb-3">
           <div className="bg-blue-600 h-2.5 rounded-full transition-all duration-500" style={{ width: `${percentage}%` }} />
         </div>
-        <div className="mt-2 text-xs text-gray-500">{completed} de {total} casos completados</div>
+        {/* Status summary pills */}
+        <div className="flex flex-wrap gap-2 text-xs">
+          {Object.entries(statusCounts).map(([status, count]) => (
+            <span
+              key={status}
+              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full font-semibold border ${STATUS_SELECT_CLS[status] || STATUS_SELECT_CLS.PENDING}`}
+            >
+              {STATUS_ICON[status]} {status}: {count}
+            </span>
+          ))}
+          <span className="text-gray-400 ml-auto">{completed} / {total} completados</span>
+        </div>
       </div>
 
       {/* Table */}
@@ -186,38 +199,46 @@ export default function Matrix() {
         <table className="min-w-full text-left border-collapse">
           <thead>
             <tr className="bg-blue-50 border-b border-blue-100">
-              <th className="px-4 py-3 text-xs font-bold text-blue-900 uppercase min-w-[80px]">#</th>
-              <th className="px-4 py-3 text-xs font-bold text-blue-900 uppercase min-w-[120px]">Ticket</th>
-              <th className="px-4 py-3 text-xs font-bold text-blue-900 uppercase min-w-[200px]">Task Name</th>
-              <th className="px-4 py-3 text-xs font-bold text-blue-900 uppercase min-w-[150px]">Módulo / Vía</th>
+              {/* Fixed columns */}
+              <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[60px]">#</th>
+              <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[90px]">Ticket</th>
+              <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[200px]">Task Name</th>
+              <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[130px]">Módulo / Vía</th>
+              <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[90px]">QA Reviewer</th>
+              <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[180px]">Expected Result</th>
 
+              {/* Custom columns (from extra_columns — e.g. Resultado Actual, Comentarios QA, etc.) */}
               {customCols.map((col: any) => (
-                <th key={col.id || col.name} className="px-4 py-3 text-xs font-bold text-indigo-900 uppercase min-w-[150px] bg-indigo-50 border-l border-indigo-100 group">
+                <th
+                  key={col.id || col.name}
+                  className="px-3 py-3 text-xs font-bold text-indigo-900 uppercase min-w-[170px] bg-indigo-50 border-l border-indigo-100 group"
+                >
                   <div className="flex items-center justify-between">
                     <span>{col.name}</span>
                     {canManage && (
                       <button
                         onClick={() => handleDeleteColumn(col.id || col.name)}
-                        className="opacity-0 group-hover:opacity-100 text-indigo-300 hover:text-red-500 transition-opacity ml-2 p-1 rounded"
+                        className="opacity-0 group-hover:opacity-100 text-indigo-300 hover:text-red-500 transition-opacity ml-1 p-0.5 rounded"
                         title="Eliminar columna"
                       >
-                        <X className="w-3 h-3" />
+                        ✕
                       </button>
                     )}
                   </div>
                 </th>
               ))}
 
-              <th className="px-4 py-3 text-xs font-bold text-blue-900 uppercase min-w-[200px] border-l border-blue-100">Expected Result</th>
-              <th className="px-4 py-3 text-xs font-bold text-blue-900 uppercase min-w-[120px]">Status</th>
-              <th className="px-4 py-3 text-xs font-bold text-blue-900 uppercase min-w-[150px]">Observación</th>
-              <th className="px-4 py-3 text-xs font-bold text-blue-900 uppercase">Acción</th>
+              <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[180px] border-l border-blue-100">Observación</th>
+              {/* ★ MERGED: Estado + Acción */}
+              <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[140px] sticky right-0 bg-blue-50 border-l border-blue-200 shadow-l">
+                Estado
+              </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200">
+          <tbody className="divide-y divide-gray-100">
             {cases.length === 0 ? (
               <tr>
-                <td colSpan={9 + customCols.length} className="px-6 py-8 text-center text-gray-400">
+                <td colSpan={8 + customCols.length} className="px-6 py-8 text-center text-gray-400">
                   No hay casos de prueba. Añade uno manualmente o importa un CSV.
                 </td>
               </tr>
@@ -225,10 +246,17 @@ export default function Matrix() {
               cases.map((c, index) => {
                 const execution = c.executions?.[0] || { status: 'PENDING', observation: '' };
                 const customData = c.custom_data || {};
+                const currentStatus: string = execution.status || 'PENDING';
+
                 return (
-                  <tr key={c.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 text-sm font-bold text-blue-600 whitespace-nowrap">TC-{index + 1}</td>
-                    <td className="px-4 py-3 text-sm font-semibold text-gray-900 whitespace-nowrap">
+                  <tr key={c.id} className="hover:bg-gray-50/60 transition-colors group">
+                    {/* # */}
+                    <td className="px-3 py-2 text-xs font-bold text-blue-500 whitespace-nowrap">
+                      {index + 1}
+                    </td>
+
+                    {/* Ticket */}
+                    <td className="px-3 py-2 text-xs font-semibold text-gray-900 whitespace-nowrap">
                       {c.ticket_url ? (
                         <a href={c.ticket_url} target="_blank" className="text-blue-600 hover:underline">{c.ticket_id}</a>
                       ) : (
@@ -236,35 +264,59 @@ export default function Matrix() {
                           type="text"
                           defaultValue={c.ticket_id}
                           onBlur={e => handleCellBlur(c.id, 'ticket_id', e.target.value)}
-                          placeholder="ID de Tarea..."
-                          className="w-24 bg-transparent border-b border-gray-300 focus:border-blue-500 focus:outline-none"
+                          placeholder="TC-..."
+                          className="w-20 bg-transparent border-b border-gray-300 focus:border-blue-500 focus:outline-none text-xs"
                         />
                       )}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-700">
-                      <input
-                        type="text"
-                        defaultValue={c.title}
-                        onBlur={e => handleCellBlur(c.id, 'title', e.target.value)}
-                        className="w-full bg-transparent border-b border-transparent focus:border-blue-500 focus:outline-none"
+
+                    {/* Task Name */}
+                    <td className="px-3 py-2 text-xs text-gray-700 max-w-[220px]">
+                      <TextCellPopover
+                        value={c.title || ''}
+                        onSave={val => handleCellBlur(c.id, 'title', val)}
+                        placeholder="Nombre del caso..."
                       />
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">
+
+                    {/* Módulo */}
+                    <td className="px-3 py-2 text-xs text-gray-600">
                       <input
                         type="text"
                         defaultValue={c.module}
                         onBlur={e => handleCellBlur(c.id, 'module', e.target.value)}
-                        className="w-full bg-transparent border-b border-transparent focus:border-blue-500 focus:outline-none"
+                        className="w-full bg-transparent border-b border-transparent focus:border-blue-500 focus:outline-none text-xs"
                       />
                     </td>
 
+                    {/* QA Reviewer — from custom_data.qa_reviewer */}
+                    <td className="px-3 py-2 text-xs text-gray-600">
+                      <input
+                        type="text"
+                        defaultValue={customData['qa_reviewer'] || ''}
+                        onBlur={e => handleCustomDataChange(c.id, customData, 'qa_reviewer', e.target.value)}
+                        placeholder="Revisor..."
+                        className="w-full bg-transparent border-b border-transparent focus:border-blue-500 focus:outline-none text-xs"
+                      />
+                    </td>
+
+                    {/* Expected Result */}
+                    <td className="px-3 py-2 text-xs text-gray-600 border-l border-gray-100 max-w-[200px]">
+                      <TextCellPopover
+                        value={c.expected_result || ''}
+                        onSave={val => handleCellBlur(c.id, 'expected_result', val)}
+                        placeholder="Resultado esperado..."
+                      />
+                    </td>
+
+                    {/* Custom columns (Resultado Actual, Comentarios QA, etc.) */}
                     {customCols.map((col: any) => (
-                      <td key={col.id || col.name} className="px-4 py-3 border-l border-gray-100 bg-gray-50/30">
+                      <td key={col.id || col.name} className="px-3 py-2 border-l border-gray-100 bg-indigo-50/20 max-w-[200px]">
                         {col.type === 'dropdown' ? (
                           <select
                             value={customData[col.id] || ''}
                             onChange={e => handleCustomDataChange(c.id, customData, col.id, e.target.value)}
-                            className="w-full text-sm bg-transparent border-b border-transparent focus:border-blue-500 focus:outline-none px-1 py-1"
+                            className="w-full text-xs bg-transparent border-b border-transparent focus:border-blue-500 focus:outline-none px-1 py-1"
                           >
                             <option value="">— Seleccionar —</option>
                             {col.options?.map((opt: string) => (
@@ -272,54 +324,56 @@ export default function Matrix() {
                             ))}
                           </select>
                         ) : (
-                          <input
-                            type="text"
+                          <TextCellPopover
                             value={customData[col.id] || ''}
-                            onChange={e => handleCustomDataChange(c.id, customData, col.id, e.target.value)}
+                            onSave={val => handleCustomDataChange(c.id, customData, col.id, val)}
                             placeholder="..."
-                            className="w-full text-sm bg-transparent border-b border-transparent focus:border-blue-500 focus:outline-none px-1 py-1"
                           />
                         )}
                       </td>
                     ))}
 
-                    <td className="px-4 py-3 text-sm text-gray-600 border-l border-gray-100">
-                      <input
-                        type="text"
-                        defaultValue={c.expected_result}
-                        onBlur={e => handleCellBlur(c.id, 'expected_result', e.target.value)}
-                        className="w-full bg-transparent border-b border-transparent focus:border-blue-500 focus:outline-none"
+                    {/* Observación */}
+                    <td className="px-3 py-2 text-xs text-gray-600 border-l border-gray-100 max-w-[200px]">
+                      <TextCellPopover
+                        value={execution.observation || ''}
+                        onSave={val => execution.id ? updateObservation(execution.id, val) : Promise.resolve()}
+                        placeholder="Sin notas..."
                       />
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap">{getStatusBadge(execution.status)}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">
-                      <input
-                        type="text"
-                        defaultValue={execution.observation}
-                        onBlur={e => handleObservationBlur(execution.id, e.target.value)}
-                        placeholder="Sin notas"
-                        className="w-full bg-transparent border-b border-transparent focus:border-blue-500 focus:outline-none text-xs"
-                      />
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <div className="flex items-center space-x-2">
+
+                    {/* ★ ESTADO (merged Status + Action) — sticky right */}
+                    <td className={`px-3 py-2 whitespace-nowrap sticky right-0 border-l border-gray-200 shadow-l transition-colors ${
+                      currentStatus === 'PASS'    ? 'bg-green-50/80' :
+                      currentStatus === 'FAIL'    ? 'bg-red-50/80' :
+                      currentStatus === 'BLOCKED' ? 'bg-yellow-50/80' :
+                      'bg-gray-50/80'
+                    }`}>
+                      <div className="flex items-center gap-1.5">
+                        {/* Colored status select */}
                         <select
-                          className="text-xs border-gray-300 rounded-md shadow-sm bg-white px-2 py-1 border"
-                          value={execution.status}
+                          className={`
+                            text-xs font-semibold rounded-lg px-2 py-1.5 border cursor-pointer
+                            focus:outline-none focus:ring-2 transition-all flex-1
+                            ${STATUS_SELECT_CLS[currentStatus] || STATUS_SELECT_CLS.PENDING}
+                          `}
+                          value={currentStatus}
                           onChange={e => handleStatusChange(c, e.target.value)}
                         >
-                          <option value="PENDING">PENDING</option>
-                          <option value="PASS">PASS</option>
-                          <option value="FAIL">FAIL</option>
-                          <option value="BLOCKED">BLOCKED</option>
+                          <option value="PENDING">⏳ PENDING</option>
+                          <option value="PASS">✅ PASS</option>
+                          <option value="FAIL">❌ FAIL</option>
+                          <option value="BLOCKED">⚠️ BLOCKED</option>
                         </select>
+
+                        {/* Delete button */}
                         {canManage && (
                           <button
                             onClick={() => handleDeleteRow(c.id)}
-                            className="text-gray-400 hover:text-red-600 transition-colors p-1"
+                            className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-all p-1 rounded"
                             title="Eliminar caso"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         )}
                       </div>
@@ -328,9 +382,10 @@ export default function Matrix() {
                 );
               })
             )}
+
             {/* Add Row */}
             <tr>
-              <td colSpan={9 + customCols.length} className="px-4 py-3 bg-gray-50/50">
+              <td colSpan={8 + customCols.length} className="px-4 py-3 bg-gray-50/50">
                 <button
                   onClick={handleAddRow}
                   className="w-full flex items-center justify-center py-2 text-sm font-semibold text-gray-500 hover:text-blue-600 hover:bg-blue-50 border border-dashed border-gray-300 hover:border-blue-300 rounded-lg transition-all"
@@ -343,7 +398,7 @@ export default function Matrix() {
         </table>
       </div>
 
-      {/* Modal */}
+      {/* Add Column Modal */}
       {isColModalOpen && (
         <AddColumnModal
           onAdd={handleAddColumn}

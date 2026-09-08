@@ -131,7 +131,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const versionData = cycle.test_versions as { project_id: string } | null;
     const projectId: string | null = versionData?.project_id ?? null;
 
-    // ── 1. Fetch test cases for this cycle ────────────────────────────────
+    // ── 1. Fetch test cases for this cycle ───────────────────────────────
     const ticketIds = results.map((r) => r.ticket_id);
 
     const { data: testCases, error: casesError } = await supabase
@@ -144,29 +144,79 @@ Deno.serve(async (req: Request): Promise<Response> => {
       throw new Error(`Test cases lookup failed: ${casesError.message}`);
     }
 
-    // Build a quick-lookup map: ticket_id → case_id
-    const caseMap = new Map<string, string>(
-      (testCases ?? []).map((c) => [c.ticket_id, c.id]),
+    // Build case lookup: ticket_id → case_id
+    const caseIdByTicket = new Map<string, string>(
+      (testCases ?? []).map((tc) => [tc.ticket_id, tc.id])
     );
 
-    // ── 2. Build bulk upsert payload ──────────────────────────────────────
-    const upsertRows: object[] = [];
+    // ── 1b. Fetch executions for this cycle (separate query — avoids join ambiguity) ─
+    const caseIds = (testCases ?? []).map((tc) => tc.id);
+    const { data: execRows, error: execLookupError } = await supabase
+      .from("test_executions")
+      .select("id, case_id")
+      .eq("cycle_id", cycle_id)
+      .in("case_id", caseIds);
+
+    if (execLookupError) {
+      throw new Error(`Executions lookup failed: ${execLookupError.message}`);
+    }
+
+    // Build lookup map: ticket_id → { caseId, executionId }
+    type CaseRef = { caseId: string; executionId: string | null };
+    const execIdByCaseId = new Map<string, string>(
+      (execRows ?? []).map((e) => [e.case_id, e.id])
+    );
+    const caseMap = new Map<string, CaseRef>();
+    for (const [ticketId, caseId] of caseIdByTicket.entries()) {
+      caseMap.set(ticketId, { caseId, executionId: execIdByCaseId.get(caseId) ?? null });
+    }
+
+    // ── 2. Update or insert executions ───────────────────────────────────
     const missingTickets: string[] = [];
     const auditEntries: object[] = [];
+    let updatedCount = 0;
 
     for (const result of results) {
-      const caseId = caseMap.get(result.ticket_id);
-      if (!caseId) {
+      const ref = caseMap.get(result.ticket_id);
+      if (!ref) {
         missingTickets.push(result.ticket_id);
         continue;
       }
 
-      upsertRows.push({
-        case_id: caseId,
-        cycle_id: cycle_id,
-        status: result.status,
-        observation: result.observation ?? null,
-      });
+      if (ref.executionId) {
+        // UPDATE existing execution by its PK — no UNIQUE constraint needed
+        const { error: updateError } = await supabase
+          .from("test_executions")
+          .update({
+            status: result.status,
+            observation: result.observation ?? null,
+          })
+          .eq("id", ref.executionId);
+
+        if (updateError) {
+          throw new Error(
+            `Execution update failed for ${result.ticket_id}: ${updateError.message}`,
+          );
+        }
+      } else {
+        // INSERT new execution (case was created without one — edge case)
+        const { error: insertError } = await supabase
+          .from("test_executions")
+          .insert({
+            case_id: ref.caseId,
+            cycle_id: cycle_id,
+            status: result.status,
+            observation: result.observation ?? null,
+          });
+
+        if (insertError) {
+          throw new Error(
+            `Execution insert failed for ${result.ticket_id}: ${insertError.message}`,
+          );
+        }
+      }
+
+      updatedCount++;
 
       if (projectId) {
         auditEntries.push({
@@ -174,7 +224,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
           user_email: reported_by,
           action: "UPDATE",
           entity_type: "EXECUTION",
-          entity_id: caseId,
+          entity_id: ref.caseId,
           details: {
             cycle_id,
             ticket_id: result.ticket_id,
@@ -184,19 +234,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
         });
       }
     }
-
-    // Bulk upsert all executions in a single DB round-trip
-    if (upsertRows.length > 0) {
-      const { error: bulkError } = await supabase
-        .from("test_executions")
-        .upsert(upsertRows, { onConflict: "case_id" });
-
-      if (bulkError) {
-        throw new Error(`Bulk execution upsert failed: ${bulkError.message}`);
-      }
-    }
-
-    const updatedCount = upsertRows.length;
 
     // ── 3. Compute new cycle status ───────────────────────────────────────
     const { data: allExecutions, error: execFetchError } = await supabase

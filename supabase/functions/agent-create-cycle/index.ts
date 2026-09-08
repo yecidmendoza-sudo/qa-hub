@@ -1,6 +1,6 @@
 // agent-create-cycle
 // Supabase Edge Function — Deno/TypeScript
-// Creates a new QA cycle with test cases and initial executions.
+// Creates a new QA cycle with test cases, initial executions, and flexible extra columns.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -15,11 +15,21 @@ const QA_HUB_BASE_URL = Deno.env.get("QA_HUB_BASE_URL") ?? "https://qa-hub-qvnt-
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
+interface ExtraColumn {
+  id: string;           // stable key used in custom_data (e.g. "actual_result")
+  name: string;         // display name (e.g. "Resultado Actual")
+  type: "text" | "dropdown";
+  options?: string[];   // only for dropdown
+}
+
 interface TestCaseInput {
   ticket_id: string;
   title: string;
   module?: string;
   expected_result?: string;
+  qa_reviewer?: string;            // QA who reviewed/executed this case
+  // Flexible extra fields — keyed by ExtraColumn.id
+  custom_data?: Record<string, string>;
 }
 
 interface CreateCyclePayload {
@@ -28,6 +38,8 @@ interface CreateCyclePayload {
   cycle_type: string;
   test_cases: TestCaseInput[];
   created_by: string;
+  // Optional: define extra columns to show in Matrix view
+  extra_columns?: ExtraColumn[];
 }
 
 // ── Handler ────────────────────────────────────────────────────────────────
@@ -62,7 +74,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return jsonError("Invalid JSON body", 400);
   }
 
-  const { project_name, version, cycle_type, test_cases, created_by } = payload;
+  const { project_name, version, cycle_type, test_cases, created_by, extra_columns } = payload;
 
   if (!project_name || !version || !cycle_type || !created_by) {
     return jsonError(
@@ -155,7 +167,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
       versionId = newVersion.id;
     }
 
-    // ── 3. Create cycle ───────────────────────────────────────────────────
+    // ── 3. Build custom_columns array for the cycle ───────────────────────
+    // Normalize extra_columns: ensure each has a stable id
+    const resolvedExtraColumns: ExtraColumn[] = (extra_columns ?? []).map((col) => ({
+      id: col.id,
+      name: col.name,
+      type: col.type ?? "text",
+      options: col.options ?? [],
+    }));
+
+    // ── 4. Create cycle ───────────────────────────────────────────────────
     const { data: cycle, error: cycleError } = await supabase
       .from("test_cycles")
       .insert({
@@ -165,7 +186,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
         type: cycle_type,
         status: "IN_PROGRESS",
         custom_values: {},
-        custom_columns: [],
+        // Store extra column definitions so Matrix.tsx renders them automatically
+        custom_columns: resolvedExtraColumns,
       })
       .select("id")
       .single();
@@ -178,14 +200,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     const cycleId: string = cycle.id;
 
-    // ── 4. Insert test cases ──────────────────────────────────────────────
+    // ── 5. Insert test cases (with custom_data for flexible columns) ───────
     const casesToInsert = test_cases.map((tc) => ({
       cycle_id: cycleId,
       ticket_id: tc.ticket_id,
       module: tc.module ?? "",
       title: tc.title,
       expected_result: tc.expected_result ?? "",
-      custom_data: {},
+      // Merge qa_reviewer into custom_data so it renders in the QA Reviewer column
+      custom_data: {
+        ...(tc.custom_data ?? {}),
+        ...(tc.qa_reviewer ? { qa_reviewer: tc.qa_reviewer } : {}),
+      },
     }));
 
     const { data: insertedCases, error: casesError } = await supabase
@@ -199,9 +225,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
       );
     }
 
-    // ── 5. Create initial executions ──────────────────────────────────────
+    // ── 6. Create initial executions (all PENDING) ─────────────────────────
     const executionsToInsert = insertedCases.map((c) => ({
       case_id: c.id,
+      cycle_id: cycleId,
       status: "PENDING",
     }));
 
@@ -213,7 +240,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       throw new Error(`Executions creation failed: ${executionsError.message}`);
     }
 
-    // ── 6. Audit log ──────────────────────────────────────────────────────
+    // ── 7. Audit log ──────────────────────────────────────────────────────
     const { error: auditError } = await supabase.from("audit_logs").insert({
       project_id: project.id,
       user_email: created_by,
@@ -225,6 +252,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         version,
         cycle_type,
         cases_created: insertedCases.length,
+        extra_columns: resolvedExtraColumns.map((c) => c.name),
       },
     });
 
@@ -241,6 +269,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         version_id: versionId,
         matrix_url: `${QA_HUB_BASE_URL}/#/cycles/${cycleId}`,
         cases_created: insertedCases.length,
+        extra_columns_created: resolvedExtraColumns.length,
       },
       201,
     );
