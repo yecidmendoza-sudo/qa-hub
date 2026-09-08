@@ -37,7 +37,7 @@ interface MySpaceEntry {
   stage: string;
   matrix_url: string;
   summary: Record<string, number>;
-  updated_at: string;
+  created_at: string;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -208,10 +208,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // ── 4. Fetch Mi Espacio matrices for this QA ─────────────────────────────
     const mySpace: MySpaceEntry[] = [];
 
+    // Use ilike for case-insensitive match — qa_email may have been stored
+    // with different capitalisation depending on how agent-save-matrix was called.
+    const normalizedEmail = qa_email.toLowerCase().trim();
+
     const { data: folders, error: foldersError } = await supabase
       .from("personal_matrix_folders")
-      .select("ticket_id, personal_matrix_versions(version_num, stage, matrix_data, public_uuid, updated_at)")
-      .eq("qa_email", qa_email)
+      .select("ticket_id, personal_matrix_versions(version_num, stage, matrix_data, public_uuid, created_at)")
+      .ilike("qa_email", normalizedEmail)
       .order("created_at", { ascending: false })
       .limit(15);
 
@@ -239,7 +243,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
           ? `${QA_HUB_BASE_URL}/#/m/${publicUuid}`
           : `${QA_HUB_BASE_URL}/#/my-space`,
         summary: summarizeMatrixRows(rows),
-        updated_at: latest.updated_at,
+        created_at: latest.created_at,
       });
     }
 
@@ -251,6 +255,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
       total: {
         cycles: cycles.length,
         my_space: mySpace.length,
+      },
+      _debug: {
+        email_used: normalizedEmail,
+        folders_raw: folders?.length ?? "null",
+        folders_error: foldersError?.message ?? null,
       },
     });
   } catch (err: unknown) {
