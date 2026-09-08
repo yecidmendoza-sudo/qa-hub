@@ -194,10 +194,10 @@ export default function Matrix() {
       </div>
 
       {/* Table */}
-      <div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden overflow-x-auto pb-32">
+      <div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-x-auto pb-32">
         <table className="min-w-full text-left border-collapse">
           <thead>
-            <tr className="bg-blue-50 border-b border-blue-100">
+            <tr className="bg-blue-50 border-b border-blue-100 sticky top-0 z-20 shadow-sm">
               <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[60px]">#</th>
               <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[90px]">Ticket</th>
               <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[200px]">Task Name</th>
