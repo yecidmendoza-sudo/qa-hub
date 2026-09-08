@@ -1,4 +1,4 @@
-import { BookOpen, Rocket, Bot, Layout, Plug, HelpCircle, FlaskConical } from 'lucide-react';
+import { BookOpen, Rocket, Bot, Layout, Plug, HelpCircle, FlaskConical, Cpu } from 'lucide-react';
 
 interface Section {
   id: string;
@@ -9,6 +9,7 @@ interface Section {
 const SECTIONS: Section[] = [
   { id: 'quick-start',    label: 'Quick Start',          icon: Rocket },
   { id: 'gideon-skills',  label: 'Gideon — Skills',      icon: Bot },
+  { id: 'mas',            label: 'MAS — Multi-Agent',    icon: Cpu },
   { id: 'qa-hub-ui',      label: 'QA Hub — Interfaz',    icon: Layout },
   { id: 'api-reference',  label: 'API Reference',        icon: Plug },
   { id: 'api-playground', label: 'API Playground',       icon: FlaskConical },

@@ -1,6 +1,6 @@
 import DocsNav from '../components/docs/DocsNav';
 import ApiPlayground from '../components/docs/ApiPlayground';
-import { ExternalLink, Terminal, BookOpen } from 'lucide-react';
+import { ExternalLink, Terminal, BookOpen, Cpu } from 'lucide-react';
 
 // ── Re-usable section heading ──────────────────────────────────────────────
 function Section({ id, title, emoji, children }: {
@@ -93,7 +93,35 @@ const ENDPOINTS = [
   },
 ];
 
-// ── FAQ ────────────────────────────────────────────────────────────────────
+// ── MAS agent data ────────────────────────────────────────────────────────
+const MAS_AGENTS = [
+  { cluster: 'Analyst', color: 'bg-blue-50 border-blue-200', agents: [
+    { name: 'ticket-bot',        desc: 'Lee ticket de ClickUp: título, criterios, MR URL, branch, tags, versión.' },
+    { name: 'diff-bot',          desc: 'Lee el patch real del PR (GitHub/GitLab API) o git diff. PR-Aware con fallback automático a Standard.' },
+    { name: 'graph-bot',         desc: 'Traversal 3 niveles en el grafo de dependencias. Detecta módulos core y calcula regression_risk.' },
+    { name: 'api-contract-bot',  desc: 'Extrae endpoints del diff. Solo corre si diff_type = api o mixed.' },
+  ]},
+  { cluster: 'Executor', color: 'bg-emerald-50 border-emerald-200', agents: [
+    { name: 'ui-bot',   desc: 'Ejecuta pruebas UI con Playwright MCP. Corre en paralelo con api-bot.' },
+    { name: 'api-bot',  desc: 'Ejecuta pruebas de API con curl / HTTP. Corre en paralelo con ui-bot.' },
+  ]},
+  { cluster: 'Automator', color: 'bg-purple-50 border-purple-200', agents: [
+    { name: 'code-gen-bot', desc: 'Genera specs Playwright + fixtures JSON con Tessl. Solo si el ticket tiene tag autotest.' },
+  ]},
+  { cluster: 'Publisher', color: 'bg-amber-50 border-amber-200', agents: [
+    { name: 'report-bot', desc: 'Consolida resultados → POST agent-update-matrix-status en QA Hub → comenta veredicto en ClickUp.' },
+  ]},
+];
+
+const MAS_VS_MANUAL = [
+  { situation: 'Ticket con MR en GitHub/GitLab', use: '/gideon → 10 (MAS)', why: 'Lee el patch real del PR' },
+  { situation: 'Módulos core afectados (auth, payments, shipping)', use: '/gideon → 10 (MAS)', why: 'Traversal 3 niveles de dependencias' },
+  { situation: 'Ciclo completo: análisis + testing + automatización', use: '/gideon → 10 (MAS)', why: 'Todo automatizado sin intervención' },
+  { situation: 'Solo generar la Matriz (sin correr pruebas aún)', use: '/gideon → 2 (ticket-analyst)', why: 'Más rápido, sin overhead de ejecución' },
+  { situation: 'Ya tengo la Matriz, quiero registrar resultados', use: '/gideon → 3 (exploratory-tester)', why: 'Flujo manual directo' },
+  { situation: 'Publicar ciclo SMOKE desde CSV/xlsx', use: '/gideon → 6 (release-publisher)', why: 'Para releases completos por versión' },
+];
+
 const FAQS = [
   {
     q: '¿El dev necesita login para ver la matriz?',
@@ -238,6 +266,187 @@ bash ~/Projects/ai-toolkit/global_tools/install_ai_toolkit.sh`}</Code>
 ── Ciclos de Release ─────────────────────────────────
 5. /gideon → 6 → [2]       Publicar ciclo nuevo desde CSV/xlsx
 6. /gideon → 6 → [3]       Actualizar resultados en ciclo existente`}</Code>
+              </Card>
+            </Section>
+
+            {/* ── MAS ── */}
+            <Section id="mas" title="MAS — Multi-Agent System" emoji="🤖">
+              <Card>
+                <div className="flex items-center gap-2 mb-3">
+                  <Cpu className="h-4 w-4 text-purple-600" />
+                  <span className="text-sm font-semibold text-gray-800">¿Qué es el MAS?</span>
+                </div>
+                <p className="text-sm text-gray-600 leading-relaxed mb-3">
+                  El MAS (<strong>Multi-Agent System</strong>) es el flujo QA más avanzado de Gideon.
+                  En vez de un skill secuencial, orquesta <strong>agentes especializados en paralelo</strong>
+                  con circuit breaker, auto-revisión de matrices y contexto real del PR/MR.
+                </p>
+                <p className="text-sm text-gray-600 leading-relaxed">
+                  Se activa con <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">/gideon → 10</code> o
+                  escribiendo <em>"usa gideon-conductor"</em> directamente en el chat.
+                </p>
+              </Card>
+
+              {/* Architecture */}
+              <Card>
+                <h3 className="font-semibold text-gray-800 mb-4">Arquitectura de Agentes</h3>
+                <div className="space-y-3">
+                  {MAS_AGENTS.map(cluster => (
+                    <div key={cluster.cluster} className={`border rounded-lg p-3 ${cluster.color}`}>
+                      <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                        Fase {cluster.cluster}
+                      </div>
+                      <div className="space-y-2">
+                        {cluster.agents.map(agent => (
+                          <div key={agent.name} className="flex gap-3">
+                            <code className="text-xs font-mono font-semibold text-gray-700 whitespace-nowrap pt-0.5">  {agent.name}</code>
+                            <p className="text-xs text-gray-600 leading-relaxed">{agent.desc}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+
+              {/* 4 Phases */}
+              <Card>
+                <h3 className="font-semibold text-gray-800 mb-3">Las 4 Fases del MAS</h3>
+                <Code>{`Fase 0 — Bootstrap
+  Lee credentials.json, detecta sesiones interrumpidas,
+  inicializa circuit breaker + session_id único.
+
+Fase 1 — Análisis (Analyst Cluster)
+  1A ticket-bot  → Extrae contexto completo del ticket ClickUp
+  1B diff-bot    → Lee patch real del PR (o git diff en modo Standard)
+  1B graph-bot   → Traversal 3 niveles: módulos directos → callers → transitivos
+  1B api-bot*    → Extrae endpoints del diff (* solo si tipo API/Mixed)
+  1C Auto-Review → El Conductor revisa su propia Matriz antes de mostrarla:
+                   Check 1: ¿Cada archivo del diff tiene caso de prueba?
+                   Check 2: ¿Cada regression_area tiene caso 🔄 Regresión?
+                   Check 3: ¿Cada Happy Path tiene Edge/Error case? (solo riesgo HIGH)
+  → Checkpoint 1: QA aprueba la Matriz antes de continuar
+
+Fase 2 — Ejecución Paralela (Executor Cluster)
+  ui-bot  + api-bot en PARALELO (según los tipos de casos de la Matriz)
+  → Checkpoint 2: QA decide qué hacer con los fallos (R=Reportar/C=Continuar/I=Ignorar)
+
+Fase 3 — Automatización (Automator Cluster)
+  code-gen-bot → Genera specs Playwright + fixtures JSON con Tessl
+  (Solo si el ticket tiene tag 'autotest' y QA confirma)
+
+Fase 4 — Publicación (Publisher Cluster)
+  report-bot → POST agent-update-matrix-status en QA Hub
+             → Veredicto final en ClickUp (qa-approved / qa-rejected)`}</Code>
+              </Card>
+
+              {/* MAS vs Manual */}
+              <Card className="p-0 overflow-hidden">
+                <div className="px-5 py-3 bg-gray-50 border-b border-gray-200">
+                  <h3 className="text-sm font-semibold text-gray-800">¿MAS o skill manual?</h3>
+                </div>
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-4 py-2.5 text-left font-semibold text-gray-500 uppercase">Situación</th>
+                      <th className="px-4 py-2.5 text-left font-semibold text-gray-500 uppercase hidden sm:table-cell">Skill</th>
+                      <th className="px-4 py-2.5 text-left font-semibold text-gray-500 uppercase hidden md:table-cell">Por qué</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {MAS_VS_MANUAL.map((row, i) => (
+                      <tr key={i} className="hover:bg-blue-50/30">
+                        <td className="px-4 py-2.5 text-gray-700 leading-relaxed">{row.situation}</td>
+                        <td className="px-4 py-2.5 font-mono text-blue-800 hidden sm:table-cell whitespace-nowrap">{row.use}</td>
+                        <td className="px-4 py-2.5 text-gray-500 hidden md:table-cell">{row.why}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </Card>
+
+              {/* Circuit Breaker */}
+              <Card>
+                <h3 className="font-semibold text-gray-800 mb-3">Circuit Breaker</h3>
+                <p className="text-sm text-gray-600 mb-3 leading-relaxed">
+                  Cada agente tiene máximo <strong>2 intentos</strong> antes de activar su fallback.
+                  Un fallo individual <em>nunca</em> detiene el ciclo completo (excepto ticket-bot).
+                  El estado se persiste en <code className="bg-gray-100 px-1 rounded text-xs">~/.gideon/&lt;proyecto&gt;/session_&lt;ticket&gt;_&lt;ts&gt;.json</code> —
+                  si el IDE se cierra, el Conductor detecta la sesión y pregunta si reanudar.
+                </p>
+                <Code>{`ticket-bot falla  → ABORT — usar /gideon → 2 como fallback
+diff-bot PR-API   → fallback automático a git diff (Standard)
+diff-bot Standard → usar nombres de archivos inferibles del MR URL
+graph-bot CLI     → leer graph.json con Python directo
+graph-bot JSON    → skip análisis de regresión (no crítico)
+ui-bot            → REQUIRES_HUMAN los casos fallidos
+report-bot        → retry QA Hub → retry ClickUp → reporte en chat`}</Code>
+              </Card>
+
+              {/* QA Hub integration */}
+              <Card>
+                <h3 className="font-semibold text-gray-800 mb-3">Integración con QA Hub</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-500 uppercase">Fase</th>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-500 uppercase">Agente</th>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-500 uppercase">Endpoint</th>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-500 uppercase">Qué hace</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      <tr>
+                        <td className="px-3 py-2 text-gray-500">Fase 1</td>
+                        <td className="px-3 py-2 font-mono text-blue-800">ticket-bot → Conductor</td>
+                        <td className="px-3 py-2 font-mono text-emerald-700">agent-save-matrix</td>
+                        <td className="px-3 py-2 text-gray-600">Publica la Matriz con todos los casos en PENDING</td>
+                      </tr>
+                      <tr>
+                        <td className="px-3 py-2 text-gray-500">Fase 4</td>
+                        <td className="px-3 py-2 font-mono text-blue-800">report-bot</td>
+                        <td className="px-3 py-2 font-mono text-emerald-700">agent-update-matrix-status</td>
+                        <td className="px-3 py-2 text-gray-600">PATCH de statuses con los resultados reales de ui-bot/api-bot</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <p className="mt-3 text-xs text-gray-500 leading-relaxed">
+                  <strong>report-bot</strong> y <strong>exploratory-tester</strong> son mutuamente excluyentes —
+                  nunca se usan los dos en la misma sesión. Si el MAS ejecutó las pruebas, report-bot actualiza QA Hub.
+                  Si el QA ejecutó manualmente, exploratory-tester hace lo mismo.
+                </p>
+              </Card>
+
+              {/* PR-API config */}
+              <Card>
+                <h3 className="font-semibold text-gray-800 mb-3">Configurar Modo PR-API (GitHub / GitLab)</h3>
+                <p className="text-sm text-gray-600 mb-3 leading-relaxed">
+                  Para que diff-bot lea el patch real del PR agrega en
+                  <code className="bg-gray-100 px-1 rounded text-xs mx-1">~/.gideon/credentials.json</code>:
+                </p>
+                <Code>{`// GitHub
+"projects": {
+  "mi-repo": {
+    "workflow": "pr_api",
+    "vcs": {
+      "provider": "github",
+      "token": "ghp_xxxxx",
+      "diff_url": "https://api.github.com/repos/{owner}/{repo}/pulls/{number}/files"
+    }
+  }
+}
+
+// GitLab
+"vcs": {
+  "provider": "gitlab",
+  "token": "glpat-xxxxx",
+  "diff_url": "https://gitlab.com/api/v4/projects/{id}/merge_requests/{number}/diffs"
+}`}</Code>
+                <p className="mt-3 text-xs text-gray-500">
+                  Sin esta configuración, el MAS usa Modo Standard (git diff local). Ambos modos son completamente funcionales.
+                </p>
               </Card>
             </Section>
 
