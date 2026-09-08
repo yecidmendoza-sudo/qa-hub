@@ -17,6 +17,9 @@ import AddColumnModal from '../components/matrix/AddColumnModal';
 import CsvImporter from '../components/matrix/CsvImporter';
 import TextCellPopover from '../components/matrix/TextCellPopover';
 
+// Default QA Reviewer options when not defined in custom_columns
+const DEFAULT_QA_REVIEWER_OPTIONS = ['IA', 'Lisette', 'Fabricio', 'Raquel'];
+
 // ─── Status helpers ───────────────────────────────────────────────────────────
 
 const STATUS_SELECT_CLS: Record<string, string> = {
@@ -128,7 +131,7 @@ export default function Matrix() {
   if (loading) return <div className="p-8 text-gray-500">Cargando matriz...</div>;
   if (!cycle)  return <div className="p-8 text-gray-500">Ciclo no encontrado.</div>;
 
-  const customCols = cycle.custom_columns || [];
+  const customCols = (cycle.custom_columns || []).filter((col: any) => col.id !== 'qa_reviewer');
   const total = cases.length;
 
   // Stats
@@ -289,15 +292,26 @@ export default function Matrix() {
                       />
                     </td>
 
-                    {/* QA Reviewer — from custom_data.qa_reviewer */}
+                    {/* QA Reviewer — dropdown, options from custom_columns or defaults */}
                     <td className="px-3 py-2 text-xs text-gray-600">
-                      <input
-                        type="text"
-                        defaultValue={customData['qa_reviewer'] || ''}
-                        onBlur={e => handleCustomDataChange(c.id, customData, 'qa_reviewer', e.target.value)}
-                        placeholder="Revisor..."
-                        className="w-full bg-transparent border-b border-transparent focus:border-blue-500 focus:outline-none text-xs"
-                      />
+                      {(() => {
+                        const qaRevCol = customCols.find((col: any) => col.id === 'qa_reviewer');
+                        const options: string[] = qaRevCol?.options?.length
+                          ? qaRevCol.options
+                          : DEFAULT_QA_REVIEWER_OPTIONS;
+                        return (
+                          <select
+                            value={customData['qa_reviewer'] || ''}
+                            onChange={e => handleCustomDataChange(c.id, customData, 'qa_reviewer', e.target.value)}
+                            className="w-full text-xs bg-white border border-gray-200 rounded-md px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-400 text-gray-700"
+                          >
+                            <option value="">— Revisor —</option>
+                            {options.map((opt: string) => (
+                              <option key={opt} value={opt}>{opt}</option>
+                            ))}
+                          </select>
+                        );
+                      })()}
                     </td>
 
                     {/* Expected Result */}
