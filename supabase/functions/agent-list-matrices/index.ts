@@ -140,19 +140,37 @@ Deno.serve(async (req: Request): Promise<Response> => {
       return jsonError(`Account ${qa_email} is deactivated`, 403);
 
     // ── 2. Get projects accessible to this QA ────────────────────────────────
-    const { data: userProjects } = await supabase
-      .from("user_projects")
-      .select("project_id, projects(id, name)")
-      .eq("user_email", qa_email);
+    // ADMIN and QA_LEAD have access to ALL projects (no user_projects rows).
+    // QA_TESTER has explicit project assignments in user_projects.
+    const isAdminOrLead = profile.role === "ADMIN" || profile.role === "QA_LEAD";
 
     const projectIds: string[] = [];
     const projectNameMap: Record<string, string> = {};
 
-    for (const up of userProjects ?? []) {
-      const proj = (up as any).projects;
-      if (proj) {
+    if (isAdminOrLead) {
+      // Fetch all projects directly
+      const { data: allProjects } = await supabase
+        .from("projects")
+        .select("id, name")
+        .order("name");
+
+      for (const proj of allProjects ?? []) {
         projectIds.push(proj.id);
         projectNameMap[proj.id] = proj.name;
+      }
+    } else {
+      // QA_TESTER: only explicitly assigned projects
+      const { data: userProjects } = await supabase
+        .from("user_projects")
+        .select("project_id, projects(id, name)")
+        .eq("user_email", qa_email);
+
+      for (const up of userProjects ?? []) {
+        const proj = (up as any).projects;
+        if (proj) {
+          projectIds.push(proj.id);
+          projectNameMap[proj.id] = proj.name;
+        }
       }
     }
 
