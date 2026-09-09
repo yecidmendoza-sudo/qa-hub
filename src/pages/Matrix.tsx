@@ -38,6 +38,9 @@ export default function Matrix() {
   const [cases, setCases] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isColModalOpen, setIsColModalOpen] = useState(false);
+  const [filterText, setFilterText] = useState('');
+  const [filterStatus, setFilterStatus] = useState('ALL');
+  const [filterReviewer, setFilterReviewer] = useState('ALL');
 
   const canManage = ['ADMIN', 'QA_LEAD'].includes(profile?.role ?? '');
 
@@ -148,6 +151,30 @@ export default function Matrix() {
   const completed = (statusCounts.PASS || 0) + (statusCounts.FAIL || 0);
   const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
 
+  // ── Filters ───────────────────────────────────────────────────────────────────
+  // Collect unique QA Reviewers for filter dropdown (from custom_data or execution)
+  const allReviewers = Array.from(new Set(
+    cases.map(c => (c.custom_data?.qa_reviewer || '')).filter(Boolean)
+  )).sort();
+
+  const filteredCases = cases.filter(c => {
+    const status = c.executions?.[0]?.status || 'PENDING';
+    if (filterStatus !== 'ALL' && status !== filterStatus) return false;
+    if (filterReviewer !== 'ALL' && (c.custom_data?.qa_reviewer || '') !== filterReviewer) return false;
+    if (filterText) {
+      const q = filterText.toLowerCase();
+      const inTitle = (c.title || '').toLowerCase().includes(q);
+      const inModule = (c.module || '').toLowerCase().includes(q);
+      const inCustom = Object.values(c.custom_data || {}).some(
+        v => String(v || '').toLowerCase().includes(q)
+      );
+      if (!inTitle && !inModule && !inCustom) return false;
+    }
+    return true;
+  });
+  const filteredTotal = filteredCases.length;
+
+
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
@@ -201,6 +228,62 @@ export default function Matrix() {
         </div>
       </div>
 
+      {/* Filter Bar */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-3 flex flex-wrap gap-3 items-center">
+        {/* Text search */}
+        <div className="flex-1 min-w-[180px] relative">
+          <svg className="absolute left-2.5 top-2.5 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
+            type="text"
+            placeholder="Buscar tarea, proyecto, assignee..."
+            value={filterText}
+            onChange={e => setFilterText(e.target.value)}
+            className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 bg-gray-50"
+          />
+        </div>
+
+        {/* Status filter */}
+        <select
+          value={filterStatus}
+          onChange={e => setFilterStatus(e.target.value)}
+          className="text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-400 text-gray-700"
+        >
+          <option value="ALL">Todos los estados</option>
+          {['PENDING', 'PASS', 'FAIL', 'BLOCKED'].map(s => (
+            <option key={s} value={s}>{STATUS_ICON[s]} {s} ({statusCounts[s] || 0})</option>
+          ))}
+        </select>
+
+        {/* QA Reviewer filter */}
+        {allReviewers.length > 0 && (
+          <select
+            value={filterReviewer}
+            onChange={e => setFilterReviewer(e.target.value)}
+            className="text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-400 text-gray-700"
+          >
+            <option value="ALL">Todos los revisores</option>
+            {allReviewers.map(r => <option key={r} value={r}>{r}</option>)}
+          </select>
+        )}
+
+        {/* Clear filters */}
+        {(filterText || filterStatus !== 'ALL' || filterReviewer !== 'ALL') && (
+          <button
+            onClick={() => { setFilterText(''); setFilterStatus('ALL'); setFilterReviewer('ALL'); }}
+            className="text-xs text-gray-500 hover:text-red-500 underline transition-colors"
+          >
+            Limpiar filtros
+          </button>
+        )}
+
+        {/* Result count */}
+        <span className="ml-auto text-xs text-gray-400">
+          {filteredTotal} / {total} casos
+        </span>
+      </div>
+
       {/* Table */}
       <div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-x-auto pb-32">
         <table className="min-w-full text-left border-collapse">
@@ -214,7 +297,7 @@ export default function Matrix() {
                 allCols.map((col: any) => (
                   <th
                     key={col.id}
-                    className={`px-3 py-3 text-xs font-bold uppercase min-w-[160px] sticky top-0 z-20 ${
+                    className={`group px-3 py-3 text-xs font-bold uppercase min-w-[160px] sticky top-0 z-20 ${
                       col.id?.startsWith('_')
                         ? 'text-blue-900 bg-blue-50'
                         : 'text-indigo-900 bg-indigo-50 border-l border-indigo-100'
@@ -266,14 +349,17 @@ export default function Matrix() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {cases.length === 0 ? (
+            {filteredCases.length === 0 ? (
               <tr>
-                <td colSpan={6 + customCols.length} className="px-6 py-8 text-center text-gray-400">
-                  No hay casos de prueba. Añade uno manualmente o importa un CSV.
+                <td colSpan={3 + allCols.length} className="px-6 py-8 text-center text-gray-400">
+                  {cases.length === 0
+                    ? 'No hay casos de prueba. Añade uno manualmente o importa un CSV.'
+                    : `No hay resultados para los filtros aplicados. (${total} casos en total)`
+                  }
                 </td>
               </tr>
             ) : (
-              cases.map((c, index) => {
+              filteredCases.map((c, index) => {
                 const execution = c.executions?.[0] || { status: 'PENDING', observation: '' };
                 const customData = c.custom_data || {};
                 const currentStatus: string = execution.status || 'PENDING';
