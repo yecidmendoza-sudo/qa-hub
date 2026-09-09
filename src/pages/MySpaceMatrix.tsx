@@ -486,8 +486,7 @@ export default function MySpaceMatrix() {
                       ) : (
                         <TextCellPopover
                           value={row.cells[col.id] ?? ''}
-                          onChange={val => handleCellChange(row.id, col.id, val)}
-                          onBlur={val => handleCellBlur(row.id, col.id, val)}
+                          onSave={(val: string) => handleCellBlur(row.id, col.id, val)}
                         />
                       )}
                     </td>
