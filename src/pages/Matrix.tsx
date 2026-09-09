@@ -152,15 +152,25 @@ export default function Matrix() {
   const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
 
   // ── Filters ───────────────────────────────────────────────────────────────────
-  // Collect unique QA Reviewers for filter dropdown (from custom_data or execution)
+  // Split semicolon-separated reviewer strings (e.g. "Fabricio Mariscal; Lisette Nina")
   const allReviewers = Array.from(new Set(
-    cases.map(c => (c.custom_data?.qa_reviewer || '')).filter(Boolean)
+    cases.flatMap(c =>
+      (c.custom_data?.qa_reviewer || '')
+        .split(';')
+        .map((r: string) => r.trim())
+        .filter(Boolean)
+    )
   )).sort();
 
   const filteredCases = cases.filter(c => {
     const status = c.executions?.[0]?.status || 'PENDING';
     if (filterStatus !== 'ALL' && status !== filterStatus) return false;
-    if (filterReviewer !== 'ALL' && (c.custom_data?.qa_reviewer || '') !== filterReviewer) return false;
+    if (filterReviewer !== 'ALL') {
+      // match if reviewer appears anywhere in a possibly semicolon-separated value
+      const reviewers = (c.custom_data?.qa_reviewer || '')
+        .split(';').map((r: string) => r.trim());
+      if (!reviewers.includes(filterReviewer)) return false;
+    }
     if (filterText) {
       const q = filterText.toLowerCase();
       const inTitle = (c.title || '').toLowerCase().includes(q);
