@@ -38,6 +38,8 @@ export default function MySpaceMatrix() {
   const [sections, setSections] = useState<MatrixSection[]>([]);
   const [activeIdx, setActiveIdx] = useState(0);
   const [isColModalOpen, setIsColModalOpen] = useState(false);
+  const [filterText, setFilterText] = useState('');
+  const [filterStatus, setFilterStatus] = useState('ALL');
 
   // ── Load ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -156,6 +158,7 @@ export default function MySpaceMatrix() {
   };
 
   const handleDeleteRow = (rowId: string) => {
+    if (!window.confirm('¿Eliminar esta fila? Esta acción no se puede deshacer.')) return;
     setSections(prev => {
       const next = prev.map((s, i) => i !== activeIdx ? s : { ...s, rows: s.rows.filter(r => r.id !== rowId) });
       save(next);
@@ -183,6 +186,9 @@ export default function MySpaceMatrix() {
   };
 
   const handleDeleteColumn = (colId: string) => {
+    const col = sections[activeIdx]?.columns.find(c => c.id === colId);
+    const colName = col?.name || colId;
+    if (!window.confirm(`¿Eliminar la columna "${colName}"? Se borrarán todos los datos de esa columna en todas las filas.`)) return;
     setSections(prev => {
       const next = prev.map((s, i) => i !== activeIdx ? s : {
         ...s,
@@ -409,6 +415,52 @@ export default function MySpaceMatrix() {
         </div>
       )}
 
+      {/* Filter Bar */}
+      {activeSec.rows.length > 0 && (
+        <div className="flex flex-wrap gap-3 items-center px-1 mb-3">
+          {/* Text search */}
+          <div className="flex-1 min-w-[160px] relative">
+            <svg className="absolute left-2.5 top-2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="text"
+              placeholder="Buscar en la matriz..."
+              value={filterText}
+              onChange={e => setFilterText(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
+            />
+          </div>
+          {/* Status filter */}
+          <select
+            value={filterStatus}
+            onChange={e => setFilterStatus(e.target.value)}
+            className="text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 text-gray-700"
+          >
+            <option value="ALL">Todos los estados</option>
+            {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          {/* Clear + count */}
+          {(filterText || filterStatus !== 'ALL') && (
+            <button onClick={() => { setFilterText(''); setFilterStatus('ALL'); }}
+              className="text-xs text-gray-400 hover:text-red-500 underline transition-colors">
+              Limpiar
+            </button>
+          )}
+          <span className="ml-auto text-xs text-gray-400">
+            {activeSec.rows.filter(row => {
+              const statusCol = activeSec.columns.find(c => c.type === 'status');
+              if (filterStatus !== 'ALL' && statusCol && (row.cells[statusCol.id] ?? 'PENDING') !== filterStatus) return false;
+              if (filterText) {
+                const q = filterText.toLowerCase();
+                return Object.values(row.cells).some(v => String(v || '').toLowerCase().includes(q));
+              }
+              return true;
+            }).length} / {activeSec.rows.length} filas
+          </span>
+        </div>
+      )}
+
       {/* ── Table (active section) ───────────────────────────────────────── */}
       <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-sm">
         <table className="min-w-full text-sm">
@@ -417,16 +469,19 @@ export default function MySpaceMatrix() {
               {activeSec.columns.map(col => (
                 <th
                   key={col.id}
-                  className={`px-4 py-3 text-left font-semibold text-gray-500 text-xs uppercase tracking-wider whitespace-nowrap ${
+                  className={`group px-4 py-3 text-left font-semibold text-gray-500 text-xs uppercase tracking-wider whitespace-nowrap ${
                     col.type === 'status' ? 'sticky right-10 bg-gray-50 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]' : ''
                   }`}
                 >
                   <div className="flex items-center gap-1.5">
                     <span>{col.name}</span>
-                    {!col.locked && (
+                    {col.locked ? (
+                      <span title="Columna estructural — no se puede eliminar"
+                        className="opacity-0 group-hover:opacity-60 text-gray-400 text-[10px] cursor-help transition-opacity">🔒</span>
+                    ) : (
                       <button
                         onClick={() => handleDeleteColumn(col.id)}
-                        className="text-gray-300 hover:text-red-500 transition-colors"
+                        className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-opacity"
                         title={`Eliminar columna ${col.name}`}
                       >
                         <Trash2 className="w-3 h-3" />
@@ -439,14 +494,27 @@ export default function MySpaceMatrix() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {activeSec.rows.length === 0 ? (
-              <tr>
-                <td colSpan={activeSec.columns.length + 1} className="px-4 py-10 text-center text-sm text-gray-400 italic">
-                  Sin filas. Usa el botón de abajo para agregar.
-                </td>
-              </tr>
-            ) : (
-              activeSec.rows.map((row) => (
+            {(() => {
+              const statusCol = activeSec.columns.find(c => c.type === 'status');
+              const filteredRows = activeSec.rows.filter(row => {
+                if (filterStatus !== 'ALL' && statusCol && (row.cells[statusCol.id] ?? 'PENDING') !== filterStatus) return false;
+                if (filterText) {
+                  const q = filterText.toLowerCase();
+                  return Object.values(row.cells).some(v => String(v || '').toLowerCase().includes(q));
+                }
+                return true;
+              });
+              if (filteredRows.length === 0) return (
+                <tr>
+                  <td colSpan={activeSec.columns.length + 1} className="px-4 py-10 text-center text-sm text-gray-400 italic">
+                    {activeSec.rows.length === 0
+                      ? 'Sin filas. Usa el botón de abajo para agregar.'
+                      : `Sin resultados para los filtros aplicados. (${activeSec.rows.length} filas en total)`
+                    }
+                  </td>
+                </tr>
+              );
+              return filteredRows.map(row => (
                 <tr key={row.id} className="group hover:bg-gray-50 transition-colors">
                   {activeSec.columns.map(col => (
                     <td
@@ -501,8 +569,8 @@ export default function MySpaceMatrix() {
                     </button>
                   </td>
                 </tr>
-              ))
-            )}
+              ));
+            })()}
             {/* Add Row */}
             <tr>
               <td colSpan={activeSec.columns.length + 1} className="px-4 py-3 bg-gray-50/50">
