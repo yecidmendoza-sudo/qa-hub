@@ -313,12 +313,19 @@ export default function Matrix() {
                         : 'text-indigo-900 bg-indigo-50 border-l border-indigo-100'
                     }`}
                   >
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-1">
                       <span>{col.name}</span>
-                      {canManage && !col.id?.startsWith('_') && (
+                      {col.id?.startsWith('_') ? (
+                        /* Reserved column — show lock icon, not deletable */
+                        <span
+                          title="Columna estructural — no se puede eliminar"
+                          className="opacity-0 group-hover:opacity-60 text-blue-400 text-[10px] cursor-help transition-opacity"
+                        >🔒</span>
+                      ) : canManage && (
+                        /* Custom column — deletable */
                         <button
                           onClick={() => handleDeleteColumn(col.id)}
-                          className="opacity-0 group-hover:opacity-100 text-indigo-300 hover:text-red-500 transition-opacity ml-1 p-0.5 rounded"
+                          className="opacity-0 group-hover:opacity-100 text-indigo-300 hover:text-red-500 transition-opacity p-0.5 rounded"
                           title="Eliminar columna"
                         >✕</button>
                       )}
