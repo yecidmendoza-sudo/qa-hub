@@ -128,10 +128,16 @@ export default function Matrix() {
   if (loading) return <div className="p-8 text-gray-500">Cargando matriz...</div>;
   if (!cycle)  return <div className="p-8 text-gray-500">Ciclo no encontrado.</div>;
 
-  // All custom columns from DB — filter internal/display-only cols
-  const customCols: any[] = (cycle.custom_columns || []).filter(
+  // Data-driven mode: activated when custom_columns includes any reserved ID (_title, _module, etc.)
+  // Reserved IDs: _title→title, _module→module, _expected_result→expected_result, _observation→execution.observation
+
+  const allCols: any[] = (cycle.custom_columns || []).filter(
     (c: any) => c.id !== 'sort_order'
   );
+  // Legacy mode: cycles published before data-driven refactor
+  const isDataDriven = allCols.some((c: any) => c.id?.startsWith('_'));
+  // For legacy mode: only non-reserved custom cols
+  const customCols: any[] = allCols.filter((c: any) => !c.id?.startsWith('_'));
   const total = cases.length;
 
   const statusCounts = { PASS: 0, FAIL: 0, BLOCKED: 0, PENDING: 0 } as Record<string, number>;
@@ -200,33 +206,60 @@ export default function Matrix() {
         <table className="min-w-full text-left border-collapse">
           <thead>
             <tr className="border-b border-blue-100">
+              {/* # — always first */}
               <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[60px] sticky top-0 z-20 bg-blue-50">#</th>
-              <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[200px] sticky top-0 z-20 bg-blue-50">Task Name</th>
-              <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[130px] sticky top-0 z-20 bg-blue-50">Módulo / Vía</th>
-              <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[180px] border-l border-blue-100 sticky top-0 z-20 bg-blue-50">Expected Result</th>
 
-              {/* All custom columns from DB — fully data-driven, zero hardcoding */}
-              {customCols.map((col: any) => (
-                <th
-                  key={col.id || col.name}
-                  className="px-3 py-3 text-xs font-bold text-indigo-900 uppercase min-w-[160px] bg-indigo-50 border-l border-indigo-100 group sticky top-0 z-20"
-                >
-                  <div className="flex items-center justify-between">
-                    <span>{col.name}</span>
-                    {canManage && (
-                      <button
-                        onClick={() => handleDeleteColumn(col.id || col.name)}
-                        className="opacity-0 group-hover:opacity-100 text-indigo-300 hover:text-red-500 transition-opacity ml-1 p-0.5 rounded"
-                        title="Eliminar columna"
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </div>
-                </th>
-              ))}
+              {isDataDriven ? (
+                /* DATA-DRIVEN: render columns exactly as defined in custom_columns */
+                allCols.map((col: any) => (
+                  <th
+                    key={col.id}
+                    className={`px-3 py-3 text-xs font-bold uppercase min-w-[160px] sticky top-0 z-20 ${
+                      col.id?.startsWith('_')
+                        ? 'text-blue-900 bg-blue-50'
+                        : 'text-indigo-900 bg-indigo-50 border-l border-indigo-100'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span>{col.name}</span>
+                      {canManage && !col.id?.startsWith('_') && (
+                        <button
+                          onClick={() => handleDeleteColumn(col.id)}
+                          className="opacity-0 group-hover:opacity-100 text-indigo-300 hover:text-red-500 transition-opacity ml-1 p-0.5 rounded"
+                          title="Eliminar columna"
+                        >✕</button>
+                      )}
+                    </div>
+                  </th>
+                ))
+              ) : (
+                /* LEGACY: hardcoded fixed cols + custom cols + observation */
+                <>
+                  <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[200px] sticky top-0 z-20 bg-blue-50">Task Name</th>
+                  <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[130px] sticky top-0 z-20 bg-blue-50">Módulo / Vía</th>
+                  <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[180px] border-l border-blue-100 sticky top-0 z-20 bg-blue-50">Expected Result</th>
+                  {customCols.map((col: any) => (
+                    <th
+                      key={col.id || col.name}
+                      className="px-3 py-3 text-xs font-bold text-indigo-900 uppercase min-w-[160px] bg-indigo-50 border-l border-indigo-100 group sticky top-0 z-20"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span>{col.name}</span>
+                        {canManage && (
+                          <button
+                            onClick={() => handleDeleteColumn(col.id || col.name)}
+                            className="opacity-0 group-hover:opacity-100 text-indigo-300 hover:text-red-500 transition-opacity ml-1 p-0.5 rounded"
+                            title="Eliminar columna"
+                          >✕</button>
+                        )}
+                      </div>
+                    </th>
+                  ))}
+                  <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[180px] border-l border-blue-100 sticky top-0 z-20 bg-blue-50">Observación</th>
+                </>
+              )}
 
-              <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[180px] border-l border-blue-100 sticky top-0 z-20 bg-blue-50">Observación</th>
+              {/* Estado — always last, sticky right */}
               <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[140px] sticky top-0 right-0 z-30 bg-blue-50 border-l border-blue-200 shadow-l">
                 Estado
               </th>
@@ -252,43 +285,39 @@ export default function Matrix() {
                       {index + 1}
                     </td>
 
-                    {/* Task Name */}
-                    <td className="px-3 py-2 text-xs text-gray-700 max-w-[220px]">
-                      <div className="max-w-[210px] overflow-hidden">
-                        <TextCellPopover
-                          value={c.title || ''}
-                          onSave={val => handleCellBlur(c.id, 'title', val)}
-                          placeholder="Nombre del caso..."
-                        />
-                      </div>
-                    </td>
-
-                    {/* Módulo */}
-                    <td className="px-3 py-2 text-xs text-gray-600 max-w-[140px]">
-                      <div className="max-w-[130px] overflow-hidden">
-                        <input
-                          type="text"
-                          defaultValue={c.module}
-                          onBlur={e => handleCellBlur(c.id, 'module', e.target.value)}
-                          className="w-full bg-transparent border-b border-transparent focus:border-blue-500 focus:outline-none text-xs"
-                        />
-                      </div>
-                    </td>
-
-                    {/* Expected Result */}
-                    <td className="px-3 py-2 text-xs text-gray-600 border-l border-gray-100 max-w-[200px]">
-                      <div className="max-w-[190px] overflow-hidden">
-                        <TextCellPopover
-                          value={c.expected_result || ''}
-                          onSave={val => handleCellBlur(c.id, 'expected_result', val)}
-                          placeholder="Resultado esperado..."
-                        />
-                      </div>
-                    </td>
-
-                    {/* Custom columns — fully data-driven from cycle.custom_columns */}
-                    {customCols.map((col: any) => (
-                      <td key={col.id || col.name} className="px-3 py-2 border-l border-gray-100 bg-indigo-50/20 min-w-[160px]">
+                {isDataDriven ? (
+                  /* DATA-DRIVEN CELLS: render in allCols order, reserved IDs map to DB fields */
+                  allCols.map((col: any) => {
+                    if (col.id === '_title') return (
+                      <td key="_title" className="px-3 py-2 text-xs text-gray-700 max-w-[220px]">
+                        <div className="max-w-[210px] overflow-hidden">
+                          <TextCellPopover value={c.title || ''} onSave={val => handleCellBlur(c.id, 'title', val)} placeholder="Nombre del caso..." />
+                        </div>
+                      </td>
+                    );
+                    if (col.id === '_module') return (
+                      <td key="_module" className="px-3 py-2 text-xs text-gray-600 max-w-[140px]">
+                        <div className="max-w-[130px] overflow-hidden">
+                          <input type="text" defaultValue={c.module} onBlur={e => handleCellBlur(c.id, 'module', e.target.value)}
+                            className="w-full bg-transparent border-b border-transparent focus:border-blue-500 focus:outline-none text-xs" />
+                        </div>
+                      </td>
+                    );
+                    if (col.id === '_expected_result') return (
+                      <td key="_expected_result" className="px-3 py-2 text-xs text-gray-600 border-l border-gray-100 max-w-[200px]">
+                        <div className="max-w-[190px] overflow-hidden">
+                          <TextCellPopover value={c.expected_result || ''} onSave={val => handleCellBlur(c.id, 'expected_result', val)} placeholder="Resultado esperado..." />
+                        </div>
+                      </td>
+                    );
+                    if (col.id === '_observation') return (
+                      <td key="_observation" className="px-3 py-2 text-xs text-gray-600 border-l border-gray-100 max-w-[200px]">
+                        <TextCellPopover value={execution.observation || ''} onSave={val => execution.id ? updateObservation(execution.id, val) : Promise.resolve()} placeholder="Sin notas..." />
+                      </td>
+                    );
+                    // Custom (non-reserved) column
+                    return (
+                      <td key={col.id} className="px-3 py-2 border-l border-gray-100 bg-indigo-50/20 min-w-[160px]">
                         <div className="max-w-[200px] overflow-hidden">
                           {col.type === 'dropdown' ? (
                             <select
@@ -297,29 +326,54 @@ export default function Matrix() {
                               className="w-full text-xs bg-white border border-gray-200 rounded-md px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-400 text-gray-700"
                             >
                               <option value="">— Seleccionar —</option>
-                              {col.options?.map((opt: string) => (
-                                <option key={opt} value={opt}>{opt}</option>
-                              ))}
+                              {col.options?.map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
                             </select>
                           ) : (
-                            <TextCellPopover
-                              value={customData[col.id] || ''}
-                              onSave={val => handleCustomDataChange(c.id, customData, col.id, val)}
-                              placeholder="..."
-                            />
+                            <TextCellPopover value={customData[col.id] || ''} onSave={val => handleCustomDataChange(c.id, customData, col.id, val)} placeholder="..." />
+                          )}
+                        </div>
+                      </td>
+                    );
+                  })
+                ) : (
+                  /* LEGACY CELLS */
+                  <>
+                    <td className="px-3 py-2 text-xs text-gray-700 max-w-[220px]">
+                      <div className="max-w-[210px] overflow-hidden">
+                        <TextCellPopover value={c.title || ''} onSave={val => handleCellBlur(c.id, 'title', val)} placeholder="Nombre del caso..." />
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 text-xs text-gray-600 max-w-[140px]">
+                      <div className="max-w-[130px] overflow-hidden">
+                        <input type="text" defaultValue={c.module} onBlur={e => handleCellBlur(c.id, 'module', e.target.value)}
+                          className="w-full bg-transparent border-b border-transparent focus:border-blue-500 focus:outline-none text-xs" />
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 text-xs text-gray-600 border-l border-gray-100 max-w-[200px]">
+                      <div className="max-w-[190px] overflow-hidden">
+                        <TextCellPopover value={c.expected_result || ''} onSave={val => handleCellBlur(c.id, 'expected_result', val)} placeholder="Resultado esperado..." />
+                      </div>
+                    </td>
+                    {customCols.map((col: any) => (
+                      <td key={col.id || col.name} className="px-3 py-2 border-l border-gray-100 bg-indigo-50/20 min-w-[160px]">
+                        <div className="max-w-[200px] overflow-hidden">
+                          {col.type === 'dropdown' ? (
+                            <select value={customData[col.id] || ''} onChange={e => handleCustomDataChange(c.id, customData, col.id, e.target.value)}
+                              className="w-full text-xs bg-white border border-gray-200 rounded-md px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-400 text-gray-700">
+                              <option value="">— Seleccionar —</option>
+                              {col.options?.map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
+                            </select>
+                          ) : (
+                            <TextCellPopover value={customData[col.id] || ''} onSave={val => handleCustomDataChange(c.id, customData, col.id, val)} placeholder="..." />
                           )}
                         </div>
                       </td>
                     ))}
-
-                    {/* Observación */}
                     <td className="px-3 py-2 text-xs text-gray-600 border-l border-gray-100 max-w-[200px]">
-                      <TextCellPopover
-                        value={execution.observation || ''}
-                        onSave={val => execution.id ? updateObservation(execution.id, val) : Promise.resolve()}
-                        placeholder="Sin notas..."
-                      />
+                      <TextCellPopover value={execution.observation || ''} onSave={val => execution.id ? updateObservation(execution.id, val) : Promise.resolve()} placeholder="Sin notas..." />
                     </td>
+                  </>
+                )}
 
                     {/* Estado — sticky, colored select (merged Status + Action) */}
                     <td className={`px-3 py-2 whitespace-nowrap sticky right-0 border-l border-gray-200 transition-colors ${
