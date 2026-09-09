@@ -43,10 +43,19 @@ interface MatrixRow {
   observations?: Record<string, string>;
 }
 
-interface MatrixData {
+interface MatrixSection {
+  id: string;
+  title: string;
   columns: MatrixCol[];
   rows: MatrixRow[];
 }
+
+// Supports both new { sections } format and legacy { columns, rows } format
+type RawMatrixData = {
+  sections?: MatrixSection[];
+  columns?: MatrixCol[];
+  rows?: MatrixRow[];
+} | null;
 
 Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
@@ -131,31 +140,37 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     const version = versions[0];
 
-    // 3. Parse matrix_data
-    let matrixData: MatrixData = version.matrix_data as MatrixData;
-    if (!matrixData || !matrixData.rows) {
-      matrixData = parseMarkdownToMatrixData(version.content_md ?? "");
+    // 3. Normalize matrix_data to sections format (supports both old and new format)
+    const raw = version.matrix_data as RawMatrixData;
+    let sections: MatrixSection[] = toSections(raw, version.content_md ?? "");
+
+    if (sections.length === 0) {
+      return jsonError(`La matriz del ticket "${ticket_id}" no tiene datos.`, 422);
     }
 
-    // Find status column(s)
-    const statusColIds = matrixData.columns.filter((c) => c.type === "status").map((c) => c.id);
+    // Find status column from first section (status col is shared across sections)
+    const statusColIds = sections[0].columns
+      .filter((c) => c.type === "status")
+      .map((c) => c.id);
     if (statusColIds.length === 0) {
       return jsonError(`La matriz del ticket "${ticket_id}" no tiene columnas de tipo "status".`, 422);
     }
     const primaryStatusColId = statusColIds[0];
 
-    // Patch rows
-    const rowMap = new Map<string, number>();
-    matrixData.rows.forEach((r, i) => rowMap.set(r.id, i));
+    // Build row map across ALL sections { row_id → { sectionIdx, rowIdx } }
+    const rowMap = new Map<string, { si: number; ri: number }>();
+    sections.forEach((sec, si) =>
+      sec.rows.forEach((row, ri) => rowMap.set(row.id, { si, ri }))
+    );
 
     const applied: { row_id: string; old_status: string; new_status: string }[] = [];
     const notFound: string[] = [];
 
     for (const u of updates) {
-      const idx = rowMap.get(u.row_id);
-      if (idx === undefined) { notFound.push(u.row_id); continue; }
+      const loc = rowMap.get(u.row_id);
+      if (!loc) { notFound.push(u.row_id); continue; }
 
-      const row = matrixData.rows[idx];
+      const row = sections[loc.si].rows[loc.ri];
       const oldStatus = row.cells[primaryStatusColId] ?? "PENDING";
       row.cells[primaryStatusColId] = u.status;
 
@@ -171,20 +186,21 @@ Deno.serve(async (req: Request): Promise<Response> => {
       return jsonError(`Ningún row_id coincidió. IDs no encontrados: ${notFound.join(", ")}`, 404);
     }
 
-    // 4. Regenerate content_md
-    const newContentMd = serializeMatrixDataToMarkdown(matrixData, ticket_id);
+    // 4. Regenerate content_md from updated sections
+    const newContentMd = serializeSectionsToMarkdown(sections, ticket_id);
 
-    // 5. Persist
+    // 5. Persist — always save in { sections } format for consistency
     const { error: updateErr } = await supabase
       .from("personal_matrix_versions")
-      .update({ matrix_data: matrixData as unknown as Record<string, unknown>, content_md: newContentMd })
+      .update({ matrix_data: { sections }, content_md: newContentMd })
       .eq("id", version.id);
 
     if (updateErr) throw new Error(`Version update failed: ${updateErr.message}`);
 
-    // 6. Summary
+    // 6. Summary — flatten rows from all sections
+    const allRows = sections.flatMap((s) => s.rows);
     const statusCounts: Record<string, number> = { PASS: 0, FAIL: 0, BLOCKED: 0, PENDING: 0 };
-    for (const row of matrixData.rows) {
+    for (const row of allRows) {
       const s = row.cells[primaryStatusColId] ?? "PENDING";
       statusCounts[s] = (statusCounts[s] ?? 0) + 1;
     }
@@ -210,6 +226,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
+const STATUS_COL_NAMES = new Set(["estado", "status", "state"]);
+
 function cleanStatusValue(val: string): string {
   const v = val.trim();
   if (v.includes("PASS") || v === "✅") return "PASS";
@@ -218,7 +236,8 @@ function cleanStatusValue(val: string): string {
   return "PENDING";
 }
 
-function parseMarkdownToMatrixData(contentMd: string): MatrixData {
+/** Parse markdown into a single section (legacy fallback). */
+function parseMarkdownToSection(contentMd: string): MatrixSection {
   const lines = contentMd.split("\n");
   const tableLines: string[] = [];
   let inTable = false;
@@ -227,13 +246,17 @@ function parseMarkdownToMatrixData(contentMd: string): MatrixData {
     if (trimmed.startsWith("|") && trimmed.endsWith("|")) { inTable = true; tableLines.push(trimmed); }
     else if (inTable) break;
   }
-  if (tableLines.length < 2) return { columns: [{ id: "col_0", name: "Descripción", type: "text" }], rows: [] };
+
+  if (tableLines.length < 2) {
+    return { id: "section_0", title: "", columns: [{ id: "col_0", name: "Descripción", type: "text" }], rows: [] };
+  }
 
   const headerCells = tableLines[0].split("|").map((s) => s.trim()).filter(Boolean);
-  const columns: MatrixCol[] = headerCells.map((name, i) => {
-    const isStatus = ["estado", "status", "state"].includes(name.toLowerCase());
-    return { id: `col_${i}`, name, type: isStatus ? "status" : "text" };
-  });
+  const columns: MatrixCol[] = headerCells.map((name, i) => ({
+    id: `col_${i}`,
+    name,
+    type: STATUS_COL_NAMES.has(name.toLowerCase()) ? "status" : "text",
+  }));
 
   const rows: MatrixRow[] = [];
   for (let i = 2; i < tableLines.length; i++) {
@@ -246,17 +269,38 @@ function parseMarkdownToMatrixData(contentMd: string): MatrixData {
     });
     rows.push({ id: `row_${i - 2}`, cells: rowCells });
   }
-  return { columns, rows };
+  return { id: "section_0", title: "", columns, rows };
 }
 
-function serializeMatrixDataToMarkdown(data: MatrixData, ticketId: string): string {
-  const header = `# Matriz — ${ticketId}`;
-  const colHeader = `| ${data.columns.map((c) => c.name).join(" | ")} |`;
-  const colSep = `| ${data.columns.map(() => "---").join(" | ")} |`;
-  const rowLines = data.rows.map((row) =>
-    `| ${data.columns.map((col) => row.cells[col.id] ?? "").join(" | ")} |`
-  );
-  return [header, "", colHeader, colSep, ...rowLines].join("\n");
+/**
+ * Normalize any stored matrix_data format to sections array.
+ * Handles: { sections } (new), { columns, rows } (legacy), null (parse markdown).
+ */
+function toSections(raw: RawMatrixData, fallbackMd: string): MatrixSection[] {
+  if (Array.isArray(raw?.sections) && raw!.sections!.length > 0) {
+    return raw!.sections!;
+  }
+  if (Array.isArray(raw?.columns) && Array.isArray(raw?.rows)) {
+    return [{ id: "section_0", title: "", columns: raw!.columns!, rows: raw!.rows! }];
+  }
+  // Fallback: parse markdown (should be rare after migration)
+  const sec = parseMarkdownToSection(fallbackMd);
+  return sec.columns.length > 0 ? [sec] : [];
+}
+
+/** Serialize sections to markdown (keeps content_md in sync). */
+function serializeSectionsToMarkdown(sections: MatrixSection[], ticketId: string): string {
+  const parts: string[] = [`# Matriz — ${ticketId}`, ""];
+  for (const sec of sections) {
+    if (sec.title) { parts.push(`### ${sec.title}`, ""); }
+    parts.push(`| ${sec.columns.map((c) => c.name).join(" | ")} |`);
+    parts.push(`| ${sec.columns.map(() => "---").join(" | ")} |`);
+    for (const row of sec.rows) {
+      parts.push(`| ${sec.columns.map((col) => row.cells[col.id] ?? "").join(" | ")} |`);
+    }
+    parts.push("");
+  }
+  return parts.join("\n").trim();
 }
 
 function jsonResponse(data: unknown, status = 200): Response {

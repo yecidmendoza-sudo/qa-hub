@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2, Settings2, Download, Upload, X } from 'lucide-react';
 import Papa from 'papaparse';
+import TextCellPopover from '../components/matrix/TextCellPopover';
 import {
   parseMarkdownToMatrixData,
   updatePersonalMatrixData,
@@ -411,10 +412,15 @@ export default function MySpaceMatrix() {
       {/* ── Table (active section) ───────────────────────────────────────── */}
       <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-sm">
         <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 border-b border-gray-200">
+          <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
             <tr>
               {activeSec.columns.map(col => (
-                <th key={col.id} className="px-4 py-3 text-left font-semibold text-gray-500 text-xs uppercase tracking-wider whitespace-nowrap">
+                <th
+                  key={col.id}
+                  className={`px-4 py-3 text-left font-semibold text-gray-500 text-xs uppercase tracking-wider whitespace-nowrap ${
+                    col.type === 'status' ? 'sticky right-10 bg-gray-50 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]' : ''
+                  }`}
+                >
                   <div className="flex items-center gap-1.5">
                     <span>{col.name}</span>
                     {!col.locked && (
@@ -429,7 +435,7 @@ export default function MySpaceMatrix() {
                   </div>
                 </th>
               ))}
-              <th className="px-4 py-3 w-10" />
+              <th className="sticky right-0 bg-gray-50 px-4 py-3 w-10 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]" />
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -441,9 +447,16 @@ export default function MySpaceMatrix() {
               </tr>
             ) : (
               activeSec.rows.map((row) => (
-                <tr key={row.id} className="hover:bg-gray-50 transition-colors">
+                <tr key={row.id} className="group hover:bg-gray-50 transition-colors">
                   {activeSec.columns.map(col => (
-                    <td key={col.id} className="px-4 py-2">
+                    <td
+                      key={col.id}
+                      className={`px-3 py-2 ${
+                        col.type === 'status'
+                          ? 'sticky right-10 bg-white group-hover:bg-gray-50 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]'
+                          : ''
+                      }`}
+                    >
                       {col.type === 'status' ? (
                         <select
                           value={row.cells[col.id] ?? 'PENDING'}
@@ -471,16 +484,15 @@ export default function MySpaceMatrix() {
                           ))}
                         </select>
                       ) : (
-                        <input
-                          type="text"
-                          defaultValue={row.cells[col.id] ?? ''}
-                          onBlur={e => handleCellBlur(row.id, col.id, e.target.value)}
-                          className="w-full min-w-[80px] bg-transparent border-b border-transparent focus:border-blue-500 focus:outline-none text-gray-700"
+                        <TextCellPopover
+                          value={row.cells[col.id] ?? ''}
+                          onChange={val => handleCellChange(row.id, col.id, val)}
+                          onBlur={val => handleCellBlur(row.id, col.id, val)}
                         />
                       )}
                     </td>
                   ))}
-                  <td className="px-2 py-2">
+                  <td className="sticky right-0 bg-white group-hover:bg-gray-50 px-2 py-2 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]">
                     <button
                       onClick={() => handleDeleteRow(row.id)}
                       className="text-gray-300 hover:text-red-500 transition-colors p-1"

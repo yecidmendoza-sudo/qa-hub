@@ -74,7 +74,20 @@ function summarizeExecutions(
   return summary;
 }
 
-// Count statuses from matrix_data.rows cells
+// Flatten rows from matrix_data (handles both { sections } and legacy { columns, rows } formats)
+function flattenMatrixRows(
+  raw: any
+): Array<{ cells: Record<string, string> }> {
+  if (Array.isArray(raw?.sections) && raw.sections.length > 0) {
+    return (raw.sections as Array<{ rows: any[] }>).flatMap((s) => s.rows ?? []);
+  }
+  if (Array.isArray(raw?.rows)) {
+    return raw.rows;
+  }
+  return [];
+}
+
+// Count statuses from flattened matrix rows
 function summarizeMatrixRows(
   rows: Array<{ cells: Record<string, string> }>
 ): Record<string, number> {
@@ -85,7 +98,15 @@ function summarizeMatrixRows(
     PENDING: 0,
   };
   for (const row of rows ?? []) {
-    const status = (row.cells?.status ?? "PENDING").toUpperCase();
+    // Status value may be in any column — find the status-valued cell
+    let status = "PENDING";
+    for (const val of Object.values(row.cells ?? {})) {
+      const v = (val ?? "").toUpperCase();
+      if (["PASS", "FAIL", "BLOCKED", "PENDING"].includes(v)) {
+        status = v;
+        break; // first status-like value wins
+      }
+    }
     if (status in summary) summary[status]++;
     else summary["PENDING"]++;
   }
@@ -232,7 +253,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         (a: any, b: any) => b.version_num - a.version_num
       )[0];
 
-      const rows = latest.matrix_data?.rows ?? [];
+      const rows = flattenMatrixRows(latest.matrix_data);
       const publicUuid = latest.public_uuid;
 
       mySpace.push({
