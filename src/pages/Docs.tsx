@@ -53,7 +53,7 @@ const SKILLS = [
   { num: 2, name: 'ticket-analyst',     badge: 'Análisis',         color: 'purple' as const, desc: 'Analiza un ticket en profundidad y genera la Matriz de Pruebas. Publica en QA Hub (PENDING) y opcionalmente crea sub-tarea.' },
   { num: 3, name: 'exploratory-tester', badge: 'Manual',           color: 'green'  as const, desc: 'Registra resultados de pruebas manuales. Sincroniza QA Hub (Mi Espacio) y publica veredicto en ClickUp.' },
   { num: 4, name: 'suite-automator',    badge: 'Automatización',   color: 'yellow' as const, desc: 'Genera código Playwright / Tessl permanente para los casos de la Matriz.' },
-  { num: 6, name: 'release-publisher',  badge: 'Release',          color: 'blue'   as const, desc: '[2] Crea ciclo nuevo desde CSV/xlsx con detección interactiva de columnas. [3] Reporta resultados en ciclo existente.' },
+  { num: 6, name: 'release-publisher',  badge: 'Release',          color: 'blue'   as const, desc: '[2] Crea ciclo nuevo desde CSV/xlsx: auto-deriva col_id de los headers, detecta dropdowns, respeta el orden exacto del CSV. [3] Reporta resultados en ciclo existente.' },
   { num: 8, name: 'setup-clickup',      badge: 'Config',           color: 'yellow' as const, desc: 'Configura aplicaciones, usuarios de prueba y ambientes en credentials.json.' },
   { num: 9, name: 'mobile-automator',   badge: 'Android',          color: 'green'  as const, desc: 'Genera flows Maestro YAML para apps Android desde los casos tipo 📱 MOBILE de la Matriz.' },
   { num: 10, name: 'MAS Conductor',     badge: 'Auto-completo',    color: 'purple' as const, desc: 'Flujo QA completo y automático: análisis → Playwright → reporte → ClickUp. Con agentes en paralelo.' },
@@ -128,8 +128,12 @@ const FAQS = [
     a: 'No. La URL /#/m/{uuid} es pública sin login — cualquiera con el link puede verla.',
   },
   {
-    q: '¿Por qué no veo la columna "Ticket" en la matriz?',
-    a: 'ticket_id (TC-01, TC-02...) es un join key interno para la API. La UI muestra el # de fila (posición en el documento original) como identificador visible.',
+    q: '¿Por qué no veo el ID (NXEN-XXXX) como columna en la matriz?',
+    a: 'ticket_id es el join key interno de la API. Para que aparezca como columna visible, Gideon lo incluye en extra_columns (ej: id_task) Y en custom_data de cada caso. Si el CSV no tiene columna de IDs propios, se generan TC-01, TC-02... internos y no se agrega columna de ID a la UI.',
+  },
+  {
+    q: '¿Por qué Gideon da "User not found" al publicar?',
+    a: 'created_by en agent-create-cycle debe ser el email registrado en QA Hub (qa_hub_email), no el email de Antigravity/ClickUp. En credentials.json están separados: credentials.qa.email (Antigravity) vs credentials.qa.qa_hub_email (QA Hub).',
   },
   {
     q: '¿Cómo obtengo la api_key?',
@@ -141,7 +145,7 @@ const FAQS = [
   },
   {
     q: '¿Cómo actualizo Gideon con los últimos skills?',
-    a: 'Corre bash ~/Projects/ai-toolkit/global_tools/update-gideon.sh — descarga la última versión de todos los skills desde ai_toolkit.',
+    a: 'Corre: git pull && bash update-gideon.sh desde ~/Projects/ai-toolkit — descarga la última versión de todos los skills.',
   },
   {
     q: '¿Puedo tener varias matrices para el mismo ticket?',
@@ -150,6 +154,10 @@ const FAQS = [
   {
     q: '¿Por qué el orden de las filas en QA Hub coincide con mi CSV?',
     a: 'agent-create-cycle guarda sort_order (posición del array) en custom_data de cada caso. La UI ordena por sort_order, independiente del ticket_id.',
+  },
+  {
+    q: '¿Puedo tener columnas en cualquier orden?',
+    a: 'Sí. El orden de extra_columns en el request define el orden en QA Hub. Gideon respeta el orden exacto del CSV. _title va donde está "Task Name" en el CSV, no necesariamente como primera columna.',
   },
 ];
 
@@ -217,7 +225,9 @@ bash ~/Projects/ai-toolkit/global_tools/install_ai_toolkit.sh`}</Code>
 
               <Card>
                 <h3 className="font-semibold text-gray-800 mb-3">2. Actualizar skills (cuando haya cambios)</h3>
-                <Code>{`bash ~/Projects/ai-toolkit/global_tools/update-gideon.sh`}</Code>
+                <Code>{`cd ~/Projects/ai-toolkit
+git pull
+bash update-gideon.sh`}</Code>
               </Card>
 
               <Card>
@@ -454,10 +464,12 @@ report-bot        → retry QA Hub → retry ClickUp → reporte en chat`}</Code
             <Section id="qa-hub-ui" title="QA Hub — Interfaz" emoji="🗂️">
               <div className="grid md:grid-cols-2 gap-4">
                 {[
-                  { title: 'Ciclos de Release', desc: 'Vistas de SMOKE / SANITY / REGRESSION agrupadas por versión. La columna Estado es sticky a la derecha. Los títulos son sticky al hacer scroll vertical. Las columnas extra se muestran en el orden del CSV original.' },
-                  { title: 'Mi Espacio', desc: 'Matrices personales por ticket. Cada QA tiene su propia vista. La URL pública /#/m/{uuid} es accesible sin login — compártela con el dev para que vea el estado en tiempo real.' },
-                  { title: 'Sidebar Collapsible', desc: 'Click en «‹‹/››» para colapsar el sidebar a íconos. El estado se guarda en localStorage. En mobile se abre como drawer.' },
-                  { title: 'Roles', desc: 'ADMIN: acceso total. QA_LEAD: puede crear ciclos y gestionar columnas. QA_TESTER: solo edita celdas y cambia status — no puede crear ni eliminar ciclos.' },
+                  { title: 'Ciclos de Release', desc: 'Vistas SMOKE / SANITY / REGRESSION por versión. Columnas renderizadas dinámicamente desde el CSV (data-driven). Orden de columnas = orden exacto del CSV. Estado sticky a la derecha. Header sticky en scroll.' },
+                  { title: 'Mi Espacio', desc: 'Matrices personales por ticket. URL pública /#/m/{uuid} sin login — compártela con el dev. Paridad completa de features con ciclos: filtros, guards, lock icons.' },
+                  { title: 'Filtros en Matriz', desc: 'Barra de filtros en ambas vistas: búsqueda de texto libre en todas las celdas, filtro por Estado (PASS/FAIL/BLOCKED/PENDING) y por QA Reviewer. Contador en tiempo real de filas visibles.' },
+                  { title: 'Columnas Protegidas', desc: 'Columnas con IDs reservados (_title, _module, _observation) muestran 🔒 y no pueden eliminarse. Columnas custom muestran ✕ al hover. Todo borrado requiere confirmación (guard dialog).' },
+                  { title: 'Sidebar Collapsible', desc: 'Click en «‹‹/››» para colapsar el sidebar a íconos (64px). Estado guardado en localStorage.' },
+                  { title: 'Roles', desc: 'ADMIN: acceso total. QA_LEAD: crea ciclos y gestiona columnas. QA_TESTER: edita celdas y cambia status — no puede crear/eliminar ciclos ni columnas.' },
                 ].map(item => (
                   <Card key={item.title}>
                     <h3 className="font-semibold text-gray-800 mb-2">{item.title}</h3>
