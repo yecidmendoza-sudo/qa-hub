@@ -131,16 +131,23 @@ export default function Matrix() {
   if (loading) return <div className="p-8 text-gray-500">Cargando matriz...</div>;
   if (!cycle)  return <div className="p-8 text-gray-500">Ciclo no encontrado.</div>;
 
-  // Data-driven mode: activated when custom_columns includes any reserved ID (_title, _module, etc.)
-  // Reserved IDs: _title→title, _module→module, _expected_result→expected_result, _observation→execution.observation
+  // Data-driven mode: activated whenever there are ANY custom_columns defined.
+  // Reserved IDs (_title, _module, _expected_result, _observation) map to DB fields directly.
+  // Legacy mode only applies to very old cycles with ZERO custom_columns.
 
   const allCols: any[] = (cycle.custom_columns || []).filter(
     (c: any) => c.id !== 'sort_order'
   );
-  // Legacy mode: cycles published before data-driven refactor
-  const isDataDriven = allCols.some((c: any) => c.id?.startsWith('_'));
-  // For legacy mode: only non-reserved custom cols
+  // Data-driven: any cycle that has custom_columns → use this mode
+  const isDataDriven = allCols.length > 0;
+  // If _title is not in the list (old release-publisher cycles), prepend it automatically
+  const hasTitleCol = allCols.some((c: any) => c.id === '_title');
+  const effectiveCols: any[] = isDataDriven && !hasTitleCol
+    ? [{ id: '_title', name: 'Task Name', type: 'text' }, ...allCols]
+    : allCols;
+  // For legacy mode only: non-reserved custom cols
   const customCols: any[] = allCols.filter((c: any) => !c.id?.startsWith('_'));
+
   const total = cases.length;
 
   const statusCounts = { PASS: 0, FAIL: 0, BLOCKED: 0, PENDING: 0 } as Record<string, number>;
@@ -304,7 +311,7 @@ export default function Matrix() {
 
               {isDataDriven ? (
                 /* DATA-DRIVEN: render columns exactly as defined in custom_columns */
-                allCols.map((col: any) => (
+                effectiveCols.map((col: any) => (
                   <th
                     key={col.id}
                     className={`group px-3 py-3 text-xs font-bold uppercase min-w-[160px] sticky top-0 z-20 ${
@@ -368,7 +375,7 @@ export default function Matrix() {
           <tbody className="divide-y divide-gray-100">
             {filteredCases.length === 0 ? (
               <tr>
-                <td colSpan={3 + allCols.length} className="px-6 py-8 text-center text-gray-400">
+                <td colSpan={3 + effectiveCols.length} className="px-6 py-8 text-center text-gray-400">
                   {cases.length === 0
                     ? 'No hay casos de prueba. Añade uno manualmente o importa un CSV.'
                     : `No hay resultados para los filtros aplicados. (${total} casos en total)`
@@ -389,8 +396,8 @@ export default function Matrix() {
                     </td>
 
                 {isDataDriven ? (
-                  /* DATA-DRIVEN CELLS: render in allCols order, reserved IDs map to DB fields */
-                  allCols.map((col: any) => {
+                  /* DATA-DRIVEN CELLS: render in effectiveCols order, reserved IDs map to DB fields */
+                  effectiveCols.map((col: any) => {
                     if (col.id === '_title') return (
                       <td key="_title" className="px-3 py-2 text-xs text-gray-700 max-w-[220px]">
                         <div className="max-w-[210px] overflow-hidden">

@@ -176,6 +176,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
       options: col.options ?? [],
     }));
 
+    // Auto-inject _title as first column if not already present.
+    // This activates data-driven mode in Matrix.tsx for ALL cycles,
+    // eliminating hardcoded "Módulo / Vía" and "Expected Result" headers.
+    const hasTitleCol = resolvedExtraColumns.some((c) => c.id === "_title");
+    if (!hasTitleCol) {
+      resolvedExtraColumns.unshift({ id: "_title", name: "Task Name", type: "text", options: [] });
+    }
+
     // ── 4. Create cycle ───────────────────────────────────────────────────
     const { data: cycle, error: cycleError } = await supabase
       .from("test_cycles")
