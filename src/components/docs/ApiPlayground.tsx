@@ -23,24 +23,25 @@ const ENDPOINTS: Endpoint[] = [
     id: 'agent-create-cycle',
     name: 'agent-create-cycle',
     method: 'POST',
-    description: 'Crea un ciclo de release con sus casos de prueba y columnas custom.',
+    description: 'Crea un ciclo de release con sus casos de prueba y columnas custom. created_by = qa_hub_email (email registrado en QA Hub).',
     defaultPayload: {
-      project_name: 'Xenvio',
+      project_name: 'XENVIO',
       version: 'xe26.03.0-rc',
-      cycle_type: 'SMOKE',
+      cycle_type: 'SANITY',
       created_by: 'tu@shipedge.com',
       extra_columns: [
-        { id: 'via', name: 'Vía', type: 'text' },
-        { id: 'qa_reviewer', name: 'QA Reviewer', type: 'dropdown', options: ['IA', 'Lisette'] },
+        { id: 'id_task', name: 'ID TASK', type: 'text' },
+        { id: '_title', name: 'TASK NAME', type: 'text' },
+        { id: '_module', name: 'PROJECT', type: 'text' },
+        { id: 'qa_reviewer', name: 'QA Reviewer', type: 'dropdown', options: ['Lisette Nina', 'Fabricio Mariscal', 'Yecid Mendoza'] },
       ],
       test_cases: [
         {
-          ticket_id: 'TC-01',
+          ticket_id: 'NXEN-1001',
           title: 'Login con credenciales válidas',
           module: 'Auth',
-          expected_result: 'Redirige al dashboard',
-          qa_reviewer: 'IA',
-          custom_data: { via: 'Shipedge WMS', qa_reviewer: 'IA' },
+          expected_result: '',
+          custom_data: { id_task: 'NXEN-1001', qa_reviewer: 'Lisette Nina' },
         },
       ],
     },
@@ -93,7 +94,7 @@ const ENDPOINTS: Endpoint[] = [
     name: 'agent-check-identity',
     method: 'POST',
     description: 'Verifica email y rol de un QA en el sistema.',
-    defaultPayload: { email: 'tu@shipedge.com' },
+    defaultPayload: { qa_email: 'tu@shipedge.com' },
   },
 ];
 
