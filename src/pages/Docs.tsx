@@ -1,6 +1,6 @@
 import DocsNav from '../components/docs/DocsNav';
 import ApiPlayground from '../components/docs/ApiPlayground';
-import { ExternalLink, Terminal, BookOpen, Cpu, Wrench } from 'lucide-react';
+import { ExternalLink, Terminal, BookOpen, Cpu } from 'lucide-react';
 
 // ── Re-usable section heading ──────────────────────────────────────────────
 function Section({ id, title, emoji, children }: {
