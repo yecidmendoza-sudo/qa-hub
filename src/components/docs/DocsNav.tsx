@@ -1,4 +1,4 @@
-import { BookOpen, Rocket, Bot, Layout, Plug, HelpCircle, FlaskConical, Cpu } from 'lucide-react';
+import { BookOpen, Rocket, Bot, Layout, Plug, HelpCircle, FlaskConical, Cpu, Wrench } from 'lucide-react';
 
 interface Section {
   id: string;
@@ -14,6 +14,7 @@ const SECTIONS: Section[] = [
   { id: 'api-reference',  label: 'API Reference',        icon: Plug },
   { id: 'api-playground', label: 'API Playground',       icon: FlaskConical },
   { id: 'faq',            label: 'FAQ',                  icon: HelpCircle },
+  { id: 'custom-skills',  label: 'Personalizar Skills',  icon: Wrench },
 ];
 
 export default function DocsNav() {

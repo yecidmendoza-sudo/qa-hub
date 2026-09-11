@@ -1,6 +1,6 @@
 import DocsNav from '../components/docs/DocsNav';
 import ApiPlayground from '../components/docs/ApiPlayground';
-import { ExternalLink, Terminal, BookOpen, Cpu } from 'lucide-react';
+import { ExternalLink, Terminal, BookOpen, Cpu, Wrench } from 'lucide-react';
 
 // ── Re-usable section heading ──────────────────────────────────────────────
 function Section({ id, title, emoji, children }: {
@@ -531,6 +531,94 @@ report-bot        → retry QA Hub → retry ClickUp → reporte en chat`}</Code
                     <p className="text-sm text-gray-600 leading-relaxed">{faq.a}</p>
                   </Card>
                 ))}
+              </div>
+            </Section>
+
+            {/* ── PERSONALIZAR SKILLS ── */}
+            <Section id="custom-skills" title="Personalizar Skills" emoji="🔧">
+              <p className="text-sm text-gray-600 leading-relaxed mb-4">
+                Las skills de Gideon viven en{' '}
+                <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">~/.gemini/config/plugins/gideon-qa-plugin/skills/</code>.
+                Puedes modificar cualquier <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">SKILL.md</code> ahí
+                para ajustar el comportamiento de Gideon a tus necesidades — sin tocar el repositorio <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">ai-toolkit</code>.
+              </p>
+
+              <div className="space-y-4">
+                <Card>
+                  <h3 className="font-semibold text-gray-800 mb-3">⚠️ Importante — los cambios se pierden con cada update</h3>
+                  <p className="text-sm text-gray-600 leading-relaxed mb-3">
+                    Cada vez que corres <code className="bg-gray-100 px-1 rounded text-xs">bash update-gideon.sh</code>, el script
+                    copia la versión oficial de <code className="bg-gray-100 px-1 rounded text-xs">ai-toolkit</code> y sobrescribe tu skill local.
+                    Tienes dos alternativas para que tus cambios sobrevivan:
+                  </p>
+                  <div className="grid md:grid-cols-2 gap-3">
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                      <p className="text-xs font-semibold text-blue-800 mb-1">Opción A — Workspace skill personal</p>
+                      <p className="text-xs text-blue-700 leading-relaxed">
+                        Crea tu versión en <code className="bg-blue-100 px-1 rounded">WORKSPACE/.agents/skills/mi-skill/SKILL.md</code>.
+                        Antigravity la carga junto al plugin — nunca es tocada por el update.
+                        Ideal para ajustes personales.
+                      </p>
+                    </div>
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                      <p className="text-xs font-semibold text-green-800 mb-1">Opción B — Contribuir al equipo (recomendado)</p>
+                      <p className="text-xs text-green-700 leading-relaxed">
+                        Si tu mejora beneficia a todos, abre un PR en <code className="bg-green-100 px-1 rounded">ai-toolkit</code>.
+                        El lead QA aprueba y en el próximo update todos la reciben.
+                      </p>
+                    </div>
+                  </div>
+                </Card>
+
+                <Card>
+                  <h3 className="font-semibold text-gray-800 mb-3">Dónde están los archivos de cada skill</h3>
+                  <code className="block bg-gray-900 text-gray-100 text-xs font-mono p-4 rounded-lg leading-relaxed">
+                    {'~/.gemini/config/plugins/gideon-qa-plugin/'}<br />
+                    {'  skills/'}<br />
+                    {'    release-publisher/'}<br />
+                    {'      SKILL.md   ← edita este archivo'}<br />
+                    {'    ticket-analyst/'}<br />
+                    {'      SKILL.md'}<br />
+                    {'    exploratory-tester/'}<br />
+                    {'      SKILL.md'}<br />
+                    {'    task-fetcher/'}<br />
+                    {'      SKILL.md'}<br />
+                    {'    suite-automator/'}<br />
+                    {'      SKILL.md'}<br />
+                    {'    setup-clickup/'}<br />
+                    {'      SKILL.md'}<br />
+                  </code>
+                </Card>
+
+                <Card>
+                  <h3 className="font-semibold text-gray-800 mb-3">Qué decirle a tu agente en Antigravity IDE para que tome los cambios</h3>
+                  <p className="text-sm text-gray-600 mb-3">
+                    Antigravity carga los <code className="bg-gray-100 px-1 rounded text-xs">SKILL.md</code> al inicio de cada conversación.
+                    Después de editar un skill, basta con:
+                  </p>
+                  <div className="space-y-3">
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                      <p className="text-xs font-semibold text-gray-700 mb-2">1. Iniciar una nueva conversación</p>
+                      <p className="text-xs text-gray-600">El agente siempre lee los skills frescos al empezar. Cierra el chat actual y abre uno nuevo — ya tendrá tu versión modificada.</p>
+                    </div>
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                      <p className="text-xs font-semibold text-gray-700 mb-2">2. Decirle explícitamente qué skill debe usar</p>
+                      <code className="block bg-gray-900 text-green-400 text-xs font-mono p-3 rounded mt-2 leading-relaxed">
+                        {'usa el skill release-publisher para publicar esta matriz'}<br />
+                        {'lee las instrucciones de ticket-analyst y analiza el ticket XXXX'}<br />
+                        {'sigue el skill exploratory-tester para registrar estos resultados'}
+                      </code>
+                    </div>
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                      <p className="text-xs font-semibold text-amber-800 mb-1">💡 Tip — verificar qué versión está usando</p>
+                      <p className="text-xs text-amber-700 leading-relaxed">
+                        Puedes pedirle: <em>"muéstrame las primeras líneas del skill release-publisher"</em> y el agente
+                        te mostrará el contenido del <code className="bg-amber-100 px-1 rounded">SKILL.md</code> que está cargado,
+                        así confirmas que tiene tu versión modificada.
+                      </p>
+                    </div>
+                  </div>
+                </Card>
               </div>
             </Section>
 
