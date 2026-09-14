@@ -1,4 +1,4 @@
-import { BookOpen, Rocket, Bot, Layout, Plug, HelpCircle, FlaskConical, Cpu, Wrench } from 'lucide-react';
+import { BookOpen, Rocket, Bot, Layout, Plug, HelpCircle, FlaskConical, Cpu, Wrench, ExternalLink, Terminal } from 'lucide-react';
 
 interface Section {
   id: string;
@@ -40,6 +40,29 @@ export default function DocsNav() {
             <span>{label}</span>
           </button>
         ))}
+        {/* Quick links — always accessible via sticky sidebar */}
+        <div className="mt-3 pt-3 border-t border-gray-100 flex gap-2">
+          <a
+            href="https://qa-hub-qvnt-jade.vercel.app"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Abrir QA Hub"
+            className="flex-1 inline-flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs font-medium rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
+          >
+            <ExternalLink className="h-3 w-3 flex-shrink-0" />
+            QA Hub
+          </a>
+          <a
+            href="https://github.com/altacrest/ai_toolkit"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="ai_toolkit en GitHub"
+            className="flex-1 inline-flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs font-medium rounded-lg border border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100 transition-colors"
+          >
+            <Terminal className="h-3 w-3 flex-shrink-0" />
+            GitHub
+          </a>
+        </div>
       </div>
     </nav>
   );

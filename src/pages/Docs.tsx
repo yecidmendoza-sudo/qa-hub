@@ -177,7 +177,7 @@ export default function Docs() {
             Guía completa del sistema de QA de Shipedge: desde la instalación de Gideon hasta
             el uso de cada endpoint de la API.
           </p>
-          <div className="mt-6 flex flex-wrap gap-3">
+          <div className="mt-6 flex flex-wrap gap-3 lg:hidden">
             <a
               href="https://qa-hub-qvnt-jade.vercel.app"
               target="_blank"
