@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, Search, ChevronDown, ChevronRight, Trash2, History, ExternalLink, X, Calendar } from 'lucide-react';
+import { Plus, Search, ChevronDown, ChevronRight, Trash2, History, Pencil, X, Calendar } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import ViewPublicButton from '../components/shared/ViewPublicButton';
 import { useAuth } from '../lib/supabase/auth';
@@ -306,17 +306,17 @@ export default function Cycles() {
                               </p>
                             </div>
                           </div>
-                          <div className="flex items-center space-x-2">
-                            <Link
-                              to={`/cycles/${cycle.id}`}
-                              className="flex items-center px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-semibold hover:bg-indigo-100 transition-colors"
-                            >
-                              <ExternalLink className="w-3.5 h-3.5 mr-1" /> Abrir Matriz
-                            </Link>
+                          <div className="flex items-center gap-2">
                             <ViewPublicButton
                               url={`${window.location.origin}${window.location.pathname}#/cycles/public/${cycle.id}`}
                               title="Ver ciclo público (sin login)"
                             />
+                            <Link
+                              to={`/cycles/${cycle.id}`}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-800 transition-all"
+                            >
+                              <Pencil className="w-3.5 h-3.5" /> Editar
+                            </Link>
                             {canManage && (
                               <button
                                 onClick={() => handleDeleteCycle(cycle.id, cycle.type)}
