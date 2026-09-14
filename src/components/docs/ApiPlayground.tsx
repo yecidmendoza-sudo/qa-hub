@@ -138,7 +138,8 @@ function JsonDisplay({ data }: { data: unknown }) {
 
 export default function ApiPlayground() {
   const [apiKey, setApiKey] = useState(() => {
-    try { return localStorage.getItem('qa-hub-api-key') || ''; } catch { return ''; }
+    try { return localStorage.getItem('qa-hub-api-key') || import.meta.env.VITE_SUPABASE_ANON_KEY || ''; }
+    catch { return import.meta.env.VITE_SUPABASE_ANON_KEY || ''; }
   });
   const [showKey, setShowKey] = useState(false);
   const [selectedId, setSelectedId] = useState(ENDPOINTS[0].id);
