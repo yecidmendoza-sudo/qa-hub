@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { Send, Key, ChevronDown, CheckCircle2, XCircle, Loader2, Copy, Check } from 'lucide-react';
 
 const API_URL = 'https://leexvmoadhzwthzcbhph.supabase.co/functions/v1';
+// Supabase anon key — public by design (sb_publishable_*), safe to ship in frontend
+const DEFAULT_API_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY ?? 'sb_publishable_1ooOyjU13FINNiJ1wmCbmw_vKc2NvaD';
 
 interface Endpoint {
   id: string;
@@ -138,10 +140,11 @@ function JsonDisplay({ data }: { data: unknown }) {
 
 export default function ApiPlayground() {
   const [apiKey, setApiKey] = useState(() => {
-    try { return localStorage.getItem('qa-hub-api-key') || import.meta.env.VITE_SUPABASE_ANON_KEY || ''; }
-    catch { return import.meta.env.VITE_SUPABASE_ANON_KEY || ''; }
+    try { return localStorage.getItem('qa-hub-api-key') || DEFAULT_API_KEY; }
+    catch { return DEFAULT_API_KEY; }
   });
   const [showKey, setShowKey] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [selectedId, setSelectedId] = useState(ENDPOINTS[0].id);
   const [payloads, setPayloads] = useState<Record<string, string>>(() =>
     Object.fromEntries(ENDPOINTS.map(e => [e.id, JSON.stringify(e.defaultPayload, null, 2)]))
@@ -154,7 +157,11 @@ export default function ApiPlayground() {
   const endpoint = ENDPOINTS.find(e => e.id === selectedId)!;
 
   const saveKey = () => {
-    try { localStorage.setItem('qa-hub-api-key', apiKey); } catch {}
+    try {
+      localStorage.setItem('qa-hub-api-key', apiKey);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {}
   };
 
   const handleSend = async () => {
@@ -214,9 +221,13 @@ export default function ApiPlayground() {
             </button>
             <button
               onClick={saveKey}
-              className="px-3 py-2 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              className={`px-3 py-2 text-xs rounded-lg transition-colors font-medium ${
+                saved
+                  ? 'bg-green-600 text-white'
+                  : 'bg-blue-600 text-white hover:bg-blue-700'
+              }`}
             >
-              💾 Guardar
+              {saved ? '✓ Guardado' : '💾 Guardar'}
             </button>
           </div>
         </div>
