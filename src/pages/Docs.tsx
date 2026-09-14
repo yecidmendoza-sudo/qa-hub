@@ -202,7 +202,7 @@ export default function Docs() {
       <div className="max-w-5xl mx-auto px-6 py-10">
         <div className="flex gap-8 items-start">
           {/* Sticky nav — hidden on mobile */}
-          <div className="hidden lg:block">
+          <div className="hidden lg:block sticky top-6 self-start max-h-[calc(100vh-3rem)] overflow-y-auto">
             <DocsNav />
           </div>
 
