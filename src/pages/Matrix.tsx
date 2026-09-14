@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Settings2, Eye } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Settings2 } from 'lucide-react';
+import ViewPublicButton from '../components/shared/ViewPublicButton';
 import { useAuth } from '../lib/supabase/auth';
 import {
   fetchMatrix,
@@ -30,22 +31,6 @@ const STATUS_ICON: Record<string, string> = {
   PASS: '✅', FAIL: '❌', BLOCKED: '⚠️', PENDING: '⏳',
 };
 
-// ── ViewPublicCycleButton ────────────────────────────────────────────────────
-function ViewPublicCycleButton({ cycleId }: { cycleId: string }) {
-  const url = `${window.location.origin}${window.location.pathname.replace(/\/$/, '')}#/cycles/public/${cycleId}`;
-  return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noreferrer"
-      title="Ver ciclo público (sin login)"
-      className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 bg-gray-50 text-gray-600 hover:bg-violet-50 hover:text-violet-700 hover:border-violet-200 transition-all"
-    >
-      <Eye className="w-4 h-4" />
-      Ver 👁
-    </a>
-  );
-}
 
 // ── Main Component ───────────────────────────────────────────────────────────
 export default function Matrix() {
@@ -228,7 +213,11 @@ export default function Matrix() {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {/* Share public link — visible to everyone */}
-          <ViewPublicCycleButton cycleId={id!} />
+          <ViewPublicButton
+            url={`${window.location.origin}${window.location.pathname.replace(/\/$/, '')}#/cycles/public/${id}`}
+            title="Ver ciclo público (sin login)"
+            size="sm"
+          />
           {canManage && (
             <div className="flex items-center gap-2 flex-wrap">
               <CsvImporter cycle={cycle} casesCount={cases.length} onImportDone={loadMatrix} />

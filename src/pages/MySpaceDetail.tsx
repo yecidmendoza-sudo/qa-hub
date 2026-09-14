@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/supabase/auth';
 import { supabase } from '../lib/supabase/client';
-import { ArrowLeft, Copy, Eye, Check, FlaskConical, Trash2, Pencil } from 'lucide-react';
+import { ArrowLeft, Copy, Check, FlaskConical, Trash2, Pencil } from 'lucide-react';
+import ViewPublicButton from '../components/shared/ViewPublicButton';
 import { deletePersonalMatrixVersion } from '../lib/services/personalMatrixService';
 
 // URL base dinámica — funciona en cualquier entorno (dev, staging, prod)
@@ -74,21 +75,6 @@ function CopyLinkButton({ uuid }: { uuid: string }) {
   );
 }
 
-function ViewLinkButton({ uuid }: { uuid: string }) {
-  const url = `${PUBLIC_BASE}/${uuid}`;
-  return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noreferrer"
-      title="Ver matriz pública"
-      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 bg-gray-50 text-gray-600 hover:bg-violet-50 hover:text-violet-700 hover:border-violet-200 transition-all"
-    >
-      <Eye className="w-3.5 h-3.5" />
-      Ver 👁
-    </a>
-  );
-}
 
 export default function MySpaceDetail() {
   const { ticketId } = useParams<{ ticketId: string }>();
@@ -234,7 +220,7 @@ export default function MySpaceDetail() {
                         <td className="px-5 py-4">
                           <div className="flex items-center gap-2">
                             <CopyLinkButton uuid={version.public_uuid} />
-                            <ViewLinkButton uuid={version.public_uuid} />
+                            <ViewPublicButton url={`${PUBLIC_BASE}/${version.public_uuid}`} title="Ver matriz pública" />
                             <button
                               onClick={() => navigate(`/my-space/${ticketId}/${version.id}`)}
                               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-800 transition-all"

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, Search, ChevronDown, ChevronRight, Trash2, History, ExternalLink, Eye, X, Calendar } from 'lucide-react';
+import { Plus, Search, ChevronDown, ChevronRight, Trash2, History, ExternalLink, X, Calendar } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import ViewPublicButton from '../components/shared/ViewPublicButton';
 import { useAuth } from '../lib/supabase/auth';
 import {
   fetchVersionsWithCycles,
@@ -21,22 +22,6 @@ const CYCLE_STATUS_STYLES: Record<string, string> = {
   DRAFT:       'bg-gray-100 text-gray-600 border-gray-200',
 };
 
-// ── ViewPublicCycleButton ────────────────────────────────────────────────────
-function ViewPublicCycleButton({ cycleId }: { cycleId: string }) {
-  const url = `${window.location.origin}${window.location.pathname}#/cycles/public/${cycleId}`;
-  return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noreferrer"
-      title="Ver ciclo público (sin login)"
-      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 bg-gray-50 text-gray-600 hover:bg-violet-50 hover:text-violet-700 hover:border-violet-200 transition-all"
-    >
-      <Eye className="w-3.5 h-3.5" />
-      Ver 👁
-    </a>
-  );
-}
 
 // ── Main Component ──────────────────────────────────────────────────────────
 export default function Cycles() {
@@ -328,7 +313,10 @@ export default function Cycles() {
                             >
                               <ExternalLink className="w-3.5 h-3.5 mr-1" /> Abrir Matriz
                             </Link>
-                            <ViewPublicCycleButton cycleId={cycle.id} />
+                            <ViewPublicButton
+                              url={`${window.location.origin}${window.location.pathname}#/cycles/public/${cycle.id}`}
+                              title="Ver ciclo público (sin login)"
+                            />
                             {canManage && (
                               <button
                                 onClick={() => handleDeleteCycle(cycle.id, cycle.type)}
