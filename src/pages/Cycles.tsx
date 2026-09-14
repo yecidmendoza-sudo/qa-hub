@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, Search, ChevronDown, ChevronRight, Trash2, History, ExternalLink, Link2, Check, X, Calendar } from 'lucide-react';
+import { Plus, Search, ChevronDown, ChevronRight, Trash2, History, ExternalLink, Eye, X, Calendar } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/supabase/auth';
 import {
@@ -21,31 +21,20 @@ const CYCLE_STATUS_STYLES: Record<string, string> = {
   DRAFT:       'bg-gray-100 text-gray-600 border-gray-200',
 };
 
-// ── CopyPublicLinkButton ─────────────────────────────────────────────────────
-function CopyPublicLinkButton({ cycleId }: { cycleId: string }) {
-  const [copied, setCopied] = useState(false);
+// ── ViewPublicCycleButton ────────────────────────────────────────────────────
+function ViewPublicCycleButton({ cycleId }: { cycleId: string }) {
   const url = `${window.location.origin}${window.location.pathname}#/cycles/public/${cycleId}`;
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      window.prompt('Copia este link:', url);
-    }
-  };
   return (
-    <button
-      onClick={handleCopy}
-      title="Copiar link público (sin login)"
-      className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors border ${
-        copied
-          ? 'bg-green-50 text-green-700 border-green-200'
-          : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200'
-      }`}
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      title="Ver ciclo público (sin login)"
+      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 bg-gray-50 text-gray-600 hover:bg-violet-50 hover:text-violet-700 hover:border-violet-200 transition-all"
     >
-      {copied ? <><Check className="w-3.5 h-3.5" /> Copiado</> : <><Link2 className="w-3.5 h-3.5" /> Link público</>}
-    </button>
+      <Eye className="w-3.5 h-3.5" />
+      Ver 👁
+    </a>
   );
 }
 
@@ -339,7 +328,7 @@ export default function Cycles() {
                             >
                               <ExternalLink className="w-3.5 h-3.5 mr-1" /> Abrir Matriz
                             </Link>
-                            <CopyPublicLinkButton cycleId={cycle.id} />
+                            <ViewPublicCycleButton cycleId={cycle.id} />
                             {canManage && (
                               <button
                                 onClick={() => handleDeleteCycle(cycle.id, cycle.type)}

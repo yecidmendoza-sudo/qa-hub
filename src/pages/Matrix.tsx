@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Settings2, Link2, Check } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Settings2, Eye } from 'lucide-react';
 import { useAuth } from '../lib/supabase/auth';
 import {
   fetchMatrix,
@@ -30,34 +30,20 @@ const STATUS_ICON: Record<string, string> = {
   PASS: '✅', FAIL: '❌', BLOCKED: '⚠️', PENDING: '⏳',
 };
 
-// ── ShareCycleButton ──────────────────────────────────────────────────────────
-function ShareCycleButton({ cycleId }: { cycleId: string }) {
-  const [copied, setCopied] = useState(false);
+// ── ViewPublicCycleButton ────────────────────────────────────────────────────
+function ViewPublicCycleButton({ cycleId }: { cycleId: string }) {
   const url = `${window.location.origin}${window.location.pathname.replace(/\/$/, '')}#/cycles/public/${cycleId}`;
-  const handleCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      window.prompt('Copia este link público:', url);
-    }
-  }, [url]);
   return (
-    <button
-      onClick={handleCopy}
-      title="Copiar link público del ciclo (sin login)"
-      className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-colors border ${
-        copied
-          ? 'bg-green-50 text-green-700 border-green-200'
-          : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200'
-      }`}
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      title="Ver ciclo público (sin login)"
+      className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 bg-gray-50 text-gray-600 hover:bg-violet-50 hover:text-violet-700 hover:border-violet-200 transition-all"
     >
-      {copied
-        ? <><Check className="w-4 h-4" /> Copiado</>
-        : <><Link2 className="w-4 h-4" /> Link público</>
-      }
-    </button>
+      <Eye className="w-4 h-4" />
+      Ver 👁
+    </a>
   );
 }
 
@@ -242,7 +228,7 @@ export default function Matrix() {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {/* Share public link — visible to everyone */}
-          <ShareCycleButton cycleId={id!} />
+          <ViewPublicCycleButton cycleId={id!} />
           {canManage && (
             <div className="flex items-center gap-2 flex-wrap">
               <CsvImporter cycle={cycle} casesCount={cases.length} onImportDone={loadMatrix} />
