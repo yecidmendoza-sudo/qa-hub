@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Settings2 } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Settings2, Link2, Check } from 'lucide-react';
 import { useAuth } from '../lib/supabase/auth';
 import {
   fetchMatrix,
@@ -30,7 +30,38 @@ const STATUS_ICON: Record<string, string> = {
   PASS: '✅', FAIL: '❌', BLOCKED: '⚠️', PENDING: '⏳',
 };
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ── ShareCycleButton ──────────────────────────────────────────────────────────
+function ShareCycleButton({ cycleId }: { cycleId: string }) {
+  const [copied, setCopied] = useState(false);
+  const url = `${window.location.origin}${window.location.pathname.replace(/\/$/, '')}#/cycles/public/${cycleId}`;
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      window.prompt('Copia este link público:', url);
+    }
+  }, [url]);
+  return (
+    <button
+      onClick={handleCopy}
+      title="Copiar link público del ciclo (sin login)"
+      className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-colors border ${
+        copied
+          ? 'bg-green-50 text-green-700 border-green-200'
+          : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200'
+      }`}
+    >
+      {copied
+        ? <><Check className="w-4 h-4" /> Copiado</>
+        : <><Link2 className="w-4 h-4" /> Link público</>
+      }
+    </button>
+  );
+}
+
+// ── Main Component ───────────────────────────────────────────────────────────
 export default function Matrix() {
   const { id } = useParams();
   const { profile } = useAuth();
@@ -209,18 +240,22 @@ export default function Matrix() {
             <p className="text-sm text-gray-500 truncate">{cycle.project?.name} — {cycle.version}</p>
           </div>
         </div>
-        {canManage && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <CsvImporter cycle={cycle} casesCount={cases.length} onImportDone={loadMatrix} />
-            <button
-              onClick={() => setIsColModalOpen(true)}
-              className="flex items-center px-3 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-sm font-semibold transition-colors border border-indigo-200"
-            >
-              <Settings2 className="w-4 h-4 mr-1.5" />
-              Añadir Columna
-            </button>
-          </div>
-        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Share public link — visible to everyone */}
+          <ShareCycleButton cycleId={id!} />
+          {canManage && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <CsvImporter cycle={cycle} casesCount={cases.length} onImportDone={loadMatrix} />
+              <button
+                onClick={() => setIsColModalOpen(true)}
+                className="flex items-center px-3 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-sm font-semibold transition-colors border border-indigo-200"
+              >
+                <Settings2 className="w-4 h-4 mr-1.5" />
+                Añadir Columna
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Progress + Stats */}
