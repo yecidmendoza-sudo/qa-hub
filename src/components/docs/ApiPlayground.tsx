@@ -2,8 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { Send, Key, ChevronDown, CheckCircle2, XCircle, Loader2, Copy, Check } from 'lucide-react';
 
 const API_URL = 'https://leexvmoadhzwthzcbhph.supabase.co/functions/v1';
-// Supabase anon key — public by design (sb_publishable_*), safe to ship in frontend
-const DEFAULT_API_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY ?? 'sb_publishable_1ooOyjU13FINNiJ1wmCbmw_vKc2NvaD';
+// Internal API key — shared across all QA Hub agents and the Playground
+const DEFAULT_API_KEY = 'gideon-shipedge-2026-secret';
 
 interface Endpoint {
   id: string;
