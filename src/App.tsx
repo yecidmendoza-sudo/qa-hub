@@ -9,6 +9,7 @@ import Login from './pages/Login';
 import Projects from './pages/Projects';
 import Settings from './pages/Settings';
 import MatrixPublicView from './pages/MatrixPublicView';
+import CyclePublicView from './pages/CyclePublicView';
 import MySpace from './pages/MySpace';
 import MySpaceDetail from './pages/MySpaceDetail';
 import MySpaceMatrix from './pages/MySpaceMatrix';
@@ -32,6 +33,7 @@ function AppRoutes() {
 
       {/* Public routes — no login required */}
       <Route path="/m/:uuid" element={<MatrixPublicView />} />
+      <Route path="/cycles/public/:id" element={<CyclePublicView />} />
       <Route path="/accept-invite" element={<AcceptInvite />} />
       <Route path="/docs" element={<Docs />} />
 

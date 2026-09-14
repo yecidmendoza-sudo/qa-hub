@@ -216,11 +216,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
       title: tc.title,
       expected_result: tc.expected_result ?? "",
       // Merge qa_reviewer + sort_order into custom_data
-      // sort_order preserves exact document row order (0-indexed) for display
+      // sort_order MUST come after the spread so the server-calculated idx
+      // always takes precedence — agents must NOT include sort_order in custom_data.
       custom_data: {
-        sort_order: String(idx),           // document position — used for sorting in Matrix
         ...(tc.custom_data ?? {}),
         ...(tc.qa_reviewer ? { qa_reviewer: tc.qa_reviewer } : {}),
+        sort_order: String(idx),           // ← LAST: server always wins, cannot be overwritten
       },
     }));
 
@@ -277,7 +278,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
         success: true,
         cycle_id: cycleId,
         version_id: versionId,
-        matrix_url: `${QA_HUB_BASE_URL}/#/cycles/${cycleId}`,
+        matrix_url:  `${QA_HUB_BASE_URL}/#/cycles/${cycleId}`,
+        public_url:  `${QA_HUB_BASE_URL}/#/cycles/public/${cycleId}`,
         cases_created: insertedCases.length,
         extra_columns_created: resolvedExtraColumns.length,
       },
