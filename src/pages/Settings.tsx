@@ -14,6 +14,7 @@ function UserManagement() {
   const [copiedCreate, setCopiedCreate] = useState(false);
 
   const [users, setUsers] = useState<Record<string, any[]>>({});
+  const [admins, setAdmins] = useState<any[]>([]);           // ← admins separados
   const [usersLoading, setUsersLoading] = useState(false);
   const [resetMsg, setResetMsg] = useState<{ type: 'ok' | 'error'; text: string; password?: string; userId?: string } | null>(null);
   const [resetLoadingId, setResetLoadingId] = useState<string | null>(null);
@@ -62,6 +63,15 @@ function UserManagement() {
     });
 
     setUsers(grouped);
+
+    // 5. Admins (sección separada)
+    const { data: adminData } = await supabase
+      .from('profiles')
+      .select('id, email, role, active')
+      .eq('role', 'ADMIN')
+      .order('created_at', { ascending: false });
+    setAdmins((adminData || []).map((a: any) => ({ ...a, active: a.active ?? true })));
+
     setUsersLoading(false);
   };
 
@@ -104,6 +114,11 @@ function UserManagement() {
   };
 
   const handleResetPassword = async (userEmail: string, userId: string) => {
+    const confirmed = window.confirm(
+      `¿Estás seguro de que deseas resetear el password de "${userEmail}"?\n\nSe generará una nueva contraseña temporal.`
+    );
+    if (!confirmed) return;
+
     setResetLoadingId(userId);
     setResetMsg(null);
     try {
@@ -123,7 +138,16 @@ function UserManagement() {
     }
   };
 
-  const handleToggleActive = async (userId: string, currentActive: boolean) => {
+  const handleToggleActive = async (userId: string, currentActive: boolean, userEmail: string) => {
+    // Guard: no puede desactivarse a sí mismo
+    if (userId === profile?.id) return;
+
+    const action = currentActive ? 'desactivar' : 'activar';
+    const confirmed = window.confirm(
+      `¿Estás seguro de que deseas ${action} al usuario "${userEmail}"?\n\nEsta acción se puede revertir.`
+    );
+    if (!confirmed) return;
+
     setToggleLoadingId(userId);
     const { error } = await supabase
       .from('profiles')
@@ -278,7 +302,7 @@ function UserManagement() {
                         <div className="flex flex-col items-end gap-2">
                           <div className="flex items-center gap-2">
                             <button
-                              onClick={() => handleToggleActive(qa.id, qa.active)}
+                              onClick={() => handleToggleActive(qa.id, qa.active, qa.email)}
                               disabled={toggleLoadingId === qa.id}
                               className={`text-xs px-3 py-1.5 border rounded font-medium disabled:opacity-50 transition-colors flex items-center ${
                                 qa.active
@@ -320,6 +344,86 @@ function UserManagement() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Sección ADMIN */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200 bg-violet-50 flex items-center gap-2">
+          <Shield className="w-5 h-5 text-violet-600" />
+          <h2 className="text-sm font-bold text-gray-800">Administradores</h2>
+          <span className="ml-auto text-xs bg-violet-100 text-violet-700 border border-violet-200 px-2 py-0.5 rounded-full font-semibold">{admins.length} admin{admins.length !== 1 ? 's' : ''}</span>
+        </div>
+        <div className="p-6">
+          {usersLoading ? (
+            <p className="text-sm text-gray-500">Cargando admins...</p>
+          ) : admins.length === 0 ? (
+            <p className="text-sm text-gray-500">No hay administradores registrados.</p>
+          ) : (
+            <div className="divide-y divide-gray-100 border border-gray-200 rounded-lg overflow-hidden">
+              {admins.map((admin: any) => {
+                const isSelf = admin.id === profile?.id;
+                return (
+                  <div key={admin.id} className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors ${
+                    admin.active ? 'bg-white hover:bg-gray-50' : 'bg-red-50 opacity-75'
+                  }`}>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium text-gray-800">{admin.email}</span>
+                      <span className="text-xs bg-violet-100 text-violet-700 border border-violet-200 px-2 py-0.5 rounded-full font-semibold">ADMIN</span>
+                      {isSelf && (
+                        <span className="text-xs bg-blue-100 text-blue-600 border border-blue-200 px-2 py-0.5 rounded-full font-medium">Tú</span>
+                      )}
+                      {!admin.active && (
+                        <span className="text-xs bg-red-100 text-red-700 border border-red-200 px-2 py-0.5 rounded-full font-semibold">Inactivo</span>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleToggleActive(admin.id, admin.active, admin.email)}
+                          disabled={toggleLoadingId === admin.id || isSelf}
+                          title={isSelf ? 'No puedes desactivarte a ti mismo' : undefined}
+                          className={`text-xs px-3 py-1.5 border rounded font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center ${
+                            admin.active
+                              ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
+                              : 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+                          }`}
+                        >
+                          {toggleLoadingId === admin.id ? '...' : admin.active ? 'Desactivar' : 'Activar'}
+                        </button>
+                        <button
+                          onClick={() => handleResetPassword(admin.email, admin.id)}
+                          disabled={resetLoadingId === admin.id || !admin.active}
+                          className="text-xs px-3 py-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300 rounded font-medium disabled:opacity-50 flex items-center transition-colors"
+                        >
+                          <KeyRound className="w-3 h-3 mr-1" />
+                          {resetLoadingId === admin.id ? 'Resetting...' : 'Reset Password'}
+                        </button>
+                      </div>
+                      {resetMsg && resetMsg.userId === admin.id && (
+                        <div className={`text-xs p-2 rounded ${
+                          resetMsg.type === 'ok' ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'
+                        } w-full sm:w-auto`}>
+                          <span className="font-bold">{resetMsg.text}</span>
+                          {resetMsg.password && (
+                            <div className="mt-1 flex items-center bg-white border border-green-300 rounded overflow-hidden">
+                              <span className="px-2 py-1 font-mono">{resetMsg.password}</span>
+                              <button
+                                onClick={() => copyToClipboard(resetMsg.password!, 'reset')}
+                                className="px-2 py-1 bg-green-100 hover:bg-green-200 border-l border-green-300 flex items-center"
+                              >
+                                {copiedReset ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

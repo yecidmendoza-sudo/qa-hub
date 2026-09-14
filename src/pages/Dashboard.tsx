@@ -47,7 +47,8 @@ function QATeamSection({ role: viewerRole, userProjects }: { role: string; userP
         const { data } = await supabase
           .from('profiles')
           .select('email, role')
-          .in('role', ['QA_TESTER', 'QA_LEAD']);
+          .in('role', ['QA_TESTER', 'QA_LEAD'])
+          .eq('active', true);                        // ← solo activos
         qaEmails = (data || []) as { email: string; role: string }[];
       } else {
         // QA_LEAD: QA_TESTERs de sus proyectos
@@ -55,13 +56,14 @@ function QATeamSection({ role: viewerRole, userProjects }: { role: string; userP
         if (projectIds.length === 0) { setLoading(false); return; }
         const { data: assignments } = await supabase
           .from('user_projects')
-          .select('profiles(email, role)')
+          .select('profiles(email, role, active)')      // ← traer active
           .in('project_id', projectIds);
         const seen = new Set<string>();
         for (const a of (assignments || []) as any[]) {
           const e = a.profiles?.email;
           const r = a.profiles?.role;
-          if (e && r === 'QA_TESTER' && !seen.has(e)) {
+          const isActive = a.profiles?.active !== false; // ← excluir inactivos
+          if (e && r === 'QA_TESTER' && isActive && !seen.has(e)) {
             seen.add(e);
             qaEmails.push({ email: e, role: r });
           }
