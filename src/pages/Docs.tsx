@@ -48,16 +48,34 @@ function Badge({ children, color = 'blue' }: { children: string; color?: 'blue' 
 }
 
 // ── Skills table data ──────────────────────────────────────────────────────
-const SKILLS = [
-  { num: 1, name: 'task-fetcher',       badge: 'ClickUp + QA Hub', color: 'blue'   as const, desc: 'Punto de inicio del día. Opción [A] tus tickets en ClickUp, opción [B] tus matrices en QA Hub con statuses.' },
-  { num: 2, name: 'ticket-analyst',     badge: 'Análisis',         color: 'purple' as const, desc: 'Analiza un ticket en profundidad y genera la Matriz de Pruebas. Publica en QA Hub (PENDING) y opcionalmente crea sub-tarea.' },
-  { num: 3, name: 'exploratory-tester', badge: 'Manual',           color: 'green'  as const, desc: 'Registra resultados de pruebas manuales. Sincroniza QA Hub (Mi Espacio) y publica veredicto en ClickUp.' },
-  { num: 4, name: 'suite-automator',    badge: 'Automatización',   color: 'yellow' as const, desc: 'Genera código Playwright / Tessl permanente para los casos de la Matriz.' },
-  { num: 6, name: 'release-publisher',  badge: 'Release',          color: 'blue'   as const, desc: '[2] Crea ciclo nuevo desde CSV/xlsx: auto-deriva col_id de los headers, detecta dropdowns, respeta el orden exacto del CSV. [3] Reporta resultados en ciclo existente.' },
-  { num: 8, name: 'setup-clickup',      badge: 'Config',           color: 'yellow' as const, desc: 'Configura aplicaciones, usuarios de prueba y ambientes en credentials.json.' },
-  { num: 9, name: 'mobile-automator',   badge: 'Android',          color: 'green'  as const, desc: 'Genera flows Maestro YAML para apps Android desde los casos tipo 📱 MOBILE de la Matriz.' },
-  { num: 10, name: 'MAS Conductor',     badge: 'Auto-completo',    color: 'purple' as const, desc: 'Flujo QA completo y automático: análisis → Playwright → reporte → ClickUp. Con agentes en paralelo.' },
+
+// ⚡ MAS — Multi-Agent System
+const MAS_SKILLS = [
+  { num: 1, name: 'MAS Conductor',  badge: 'Auto-completo',  color: 'purple' as const, desc: 'Analiza el ticket y genera la Matriz en paralelo (diff-bot + graph-bot + stress-heuristic). Checkpoint antes de ejecutar.' },
+  { num: 2, name: 'mas-test',       badge: 'Web/API en vivo', color: 'blue'   as const, desc: 'Ejecuta casos 🖥️ UI, 🔌 API y 🔥 Stress con Playwright MCP. Task Queue: timeout por caso → siguiente. Al terminar: CSV + QA Hub + ClickUp.' },
+  { num: 3, name: 'mas-mobile',     badge: 'Android en vivo', color: 'green'  as const, desc: 'Ejecuta casos 📱 MOBILE con Android MCP. healer-bot autocorrige selectores (1 reintento). Modo híbrido con flows Maestro existentes.' },
+  { num: 4, name: 'Paralelo',       badge: 'MAS-TEST + Mobile', color: 'yellow' as const, desc: 'Lanza MAS-TEST (opción 2) y MAS-MOBILE (opción 3) simultáneamente. Consolida resultados en QA Hub al terminar ambos.' },
 ];
+
+// 🔧 ENGINE QA — Herramientas individuales
+const ENGINE_SKILLS = [
+  { num: 5, name: 'task-fetcher',       badge: 'ClickUp + QA Hub', color: 'blue'   as const, desc: 'Punto de inicio del día. Opción [A] tus tickets en ClickUp, opción [B] tus matrices en QA Hub con statuses.' },
+  { num: 6, name: 'ticket-analyst',     badge: 'Análisis',         color: 'purple' as const, desc: 'Analiza un ticket en profundidad y genera la Matriz de Pruebas (modo clásico sin paralelismo MAS). Incluye heurística de Stress Testing.' },
+  { num: 7, name: 'exploratory-tester', badge: 'Manual',           color: 'green'  as const, desc: 'Solo modo manual — el QA ejecuta y registra resultados. Sincroniza QA Hub (Mi Espacio) y publica veredicto en ClickUp.' },
+  { num: 8, name: 'suite-automator',    badge: 'Automatización',   color: 'yellow' as const, desc: 'Genera código Playwright / Tessl permanente (.spec.ts) para pipelines de CI/CD.' },
+  { num: 9, name: 'suite-planner',      badge: 'Release',          color: 'blue'   as const, desc: 'Planifica suite de Release (Smoke/Sanity/Regression) y crea Ticket Maestro en ClickUp.' },
+];
+
+// ⚙️ CONFIGURACIÓN
+const CONFIG_SKILLS = [
+  { num: 11, name: 'setup-clickup',    badge: 'Config',   color: 'yellow' as const, desc: 'Configura usuarios de prueba por ambiente (admin, manager, regular) en credentials.json.' },
+  { num: 12, name: 'Actualizar grafos', badge: 'Graphify', color: 'purple' as const, desc: 'Actualiza los grafos de dependencias de Graphify para los proyectos configurados en credentials.json.' },
+];
+
+// release-publisher (opción 10 del Engine QA)
+const RELEASE_SKILL = { num: 10, name: 'release-publisher', badge: 'Release', color: 'blue' as const, desc: '[2] Crea ciclo nuevo desde CSV/xlsx: auto-deriva col_id de los headers, detecta dropdowns, respeta el orden exacto del CSV. [3] Reporta resultados en ciclo existente.' };
+
+
 
 // ── Endpoints reference ────────────────────────────────────────────────────
 const ENDPOINTS = [
@@ -94,16 +112,13 @@ const ENDPOINTS = [
 ];
 
 // ── MAS agent data ────────────────────────────────────────────────────────
-const MAS_AGENTS = [
+const MAS_CONDUCTOR_AGENTS = [
   { cluster: 'Analyst', color: 'bg-blue-50 border-blue-200', agents: [
     { name: 'ticket-bot',        desc: 'Lee ticket de ClickUp: título, criterios, MR URL, branch, tags, versión.' },
     { name: 'diff-bot',          desc: 'Lee el patch real del PR (GitHub/GitLab API) o git diff. PR-Aware con fallback automático a Standard.' },
     { name: 'graph-bot',         desc: 'Traversal 3 niveles en el grafo de dependencias. Detecta módulos core y calcula regression_risk.' },
+    { name: 'stress-heuristic',  desc: 'Autodetecta casos de Stress Testing en el diff. Solo corre si hay patrones de rendimiento.' },
     { name: 'api-contract-bot',  desc: 'Extrae endpoints del diff. Solo corre si diff_type = api o mixed.' },
-  ]},
-  { cluster: 'Executor', color: 'bg-emerald-50 border-emerald-200', agents: [
-    { name: 'ui-bot',   desc: 'Ejecuta pruebas UI con Playwright MCP. Corre en paralelo con api-bot.' },
-    { name: 'api-bot',  desc: 'Ejecuta pruebas de API con curl / HTTP. Corre en paralelo con ui-bot.' },
   ]},
   { cluster: 'Automator', color: 'bg-purple-50 border-purple-200', agents: [
     { name: 'code-gen-bot', desc: 'Genera specs Playwright + fixtures JSON con Tessl. Solo si el ticket tiene tag autotest.' },
@@ -113,13 +128,32 @@ const MAS_AGENTS = [
   ]},
 ];
 
+const MAS_TEST_AGENTS = [
+  { cluster: 'Orchestrator', color: 'bg-blue-50 border-blue-200', agents: [
+    { name: 'ui-bot',      desc: 'Ejecuta casos 🖥️ UI con Playwright MCP. Auto-sanación: si un selector falla, analiza el DOM y reintenta con alternativa.' },
+    { name: 'api-bot',     desc: 'Ejecuta casos 🔌 API generando fixtures JSON. Polling inteligente para flujos E2E multi-sistema.' },
+    { name: 'stress-bot',  desc: 'Ejecuta casos 🔥 Stress: acciones masivas en bucle. Detecta crash/freeze del navegador.' },
+  ]},
+];
+
+const MAS_MOBILE_AGENTS = [
+  { cluster: 'Orchestrator', color: 'bg-green-50 border-green-200', agents: [
+    { name: 'device-bot',        desc: 'Gestiona el emulador/dispositivo: ListDevices, ConnectDevice, instala APK, pre-otorga permisos.' },
+    { name: 'mobile-ui-bot',     desc: 'Ejecuta casos 📱 MOBILE con Android MCP: Click, Type, Swipe, WaitForElement, Snapshot.' },
+    { name: 'healer-bot',        desc: 'Si un selector falla: Snapshot() → analiza DOM → propone alternativa → reintenta (1 vez). Registra corrección en CSV.' },
+    { name: 'mobile-stress-bot', desc: 'Ejecuta casos 🔥 Stress mobile: input masivo, scroll rápido, tap en bucle. Detecta ANR/crash.' },
+  ]},
+];
+
 const MAS_VS_MANUAL = [
-  { situation: 'Ticket con MR en GitHub/GitLab', use: '/gideon → 10 (MAS)', why: 'Lee el patch real del PR' },
-  { situation: 'Módulos core afectados (auth, payments, shipping)', use: '/gideon → 10 (MAS)', why: 'Traversal 3 niveles de dependencias' },
-  { situation: 'Ciclo completo: análisis + testing + automatización', use: '/gideon → 10 (MAS)', why: 'Todo automatizado sin intervención' },
-  { situation: 'Solo generar la Matriz (sin correr pruebas aún)', use: '/gideon → 2 (ticket-analyst)', why: 'Más rápido, sin overhead de ejecución' },
-  { situation: 'Ya tengo la Matriz, quiero registrar resultados', use: '/gideon → 3 (exploratory-tester)', why: 'Flujo manual directo' },
-  { situation: 'Publicar ciclo SMOKE desde CSV/xlsx', use: '/gideon → 6 (release-publisher)', why: 'Para releases completos por versión' },
+  { situation: 'Ticket con MR en GitHub/GitLab', use: '/gideon → 1 (MAS Conductor)', why: 'Lee el patch real del PR + análisis en paralelo' },
+  { situation: 'Módulos core afectados (auth, payments, shipping)', use: '/gideon → 1 (MAS Conductor)', why: 'Traversal 3 niveles de dependencias' },
+  { situation: 'Tengo Matriz, quiero ejecutar pruebas Web/API', use: '/gideon → 2 (MAS-TEST)', why: 'Playwright MCP sin .spec.ts — directo al navegador' },
+  { situation: 'Tengo Matriz, quiero ejecutar pruebas Android', use: '/gideon → 3 (MAS-MOBILE)', why: 'Android MCP + healer-bot para selectores rotos' },
+  { situation: 'Quiero ejecutar Web/API + Android a la vez', use: '/gideon → 4 (Paralelo)', why: 'Ambos MAS en simultáneo si la Mac lo soporta' },
+  { situation: 'Solo generar la Matriz (sin correr pruebas aún)', use: '/gideon → 6 (ticket-analyst)', why: 'Más rápido, sin overhead de ejecución' },
+  { situation: 'Ya tengo la Matriz, quiero registrar resultados manuales', use: '/gideon → 7 (exploratory-tester)', why: 'Flujo manual directo' },
+  { situation: 'Publicar ciclo SMOKE/SANITY desde CSV/xlsx', use: '/gideon → 10 (release-publisher)', why: 'Para releases completos por versión' },
 ];
 
 const FAQS = [
@@ -241,9 +275,12 @@ bash update-gideon.sh`}</Code>
 
             {/* ── GIDEON SKILLS ── */}
             <Section id="gideon-skills" title="Gideon — Skills" emoji="🤖">
+
+              {/* MAS section */}
+              <div className="text-xs font-bold text-purple-700 uppercase tracking-wider px-1 pb-1">⚡ MAS — Multi-Agent System <span className="font-normal text-gray-400 normal-case">(flujo principal)</span></div>
               <Card className="overflow-hidden p-0">
                 <table className="w-full text-sm">
-                  <thead className="bg-gray-50 border-b border-gray-200">
+                  <thead className="bg-purple-50 border-b border-purple-100">
                     <tr>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase w-8">#</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Skill</th>
@@ -251,11 +288,71 @@ bash update-gideon.sh`}</Code>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {SKILLS.map(s => (
+                    {MAS_SKILLS.map(s => (
+                      <tr key={s.num} className="hover:bg-purple-50/40 transition-colors">
+                        <td className="px-4 py-3 text-gray-400 font-mono text-xs">{s.num}</td>
+                        <td className="px-4 py-3">
+                          <div className="font-mono font-semibold text-purple-800 text-xs mb-1">{s.name}</div>
+                          <Badge color={s.color}>{s.badge}</Badge>
+                        </td>
+                        <td className="px-4 py-3 text-gray-600 text-xs hidden md:table-cell leading-relaxed">{s.desc}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </Card>
+
+              {/* Engine QA section */}
+              <div className="text-xs font-bold text-blue-700 uppercase tracking-wider px-1 pb-1 mt-4">🔧 Engine QA — Herramientas individuales</div>
+              <Card className="overflow-hidden p-0">
+                <table className="w-full text-sm">
+                  <thead className="bg-blue-50 border-b border-blue-100">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase w-8">#</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Skill</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase hidden md:table-cell">Qué hace</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {ENGINE_SKILLS.map(s => (
                       <tr key={s.num} className="hover:bg-blue-50/40 transition-colors">
                         <td className="px-4 py-3 text-gray-400 font-mono text-xs">{s.num}</td>
                         <td className="px-4 py-3">
                           <div className="font-mono font-semibold text-blue-800 text-xs mb-1">{s.name}</div>
+                          <Badge color={s.color}>{s.badge}</Badge>
+                        </td>
+                        <td className="px-4 py-3 text-gray-600 text-xs hidden md:table-cell leading-relaxed">{s.desc}</td>
+                      </tr>
+                    ))}
+                    <tr key={RELEASE_SKILL.num} className="hover:bg-blue-50/40 transition-colors">
+                      <td className="px-4 py-3 text-gray-400 font-mono text-xs">{RELEASE_SKILL.num}</td>
+                      <td className="px-4 py-3">
+                        <div className="font-mono font-semibold text-blue-800 text-xs mb-1">{RELEASE_SKILL.name}</div>
+                        <Badge color={RELEASE_SKILL.color}>{RELEASE_SKILL.badge}</Badge>
+                      </td>
+                      <td className="px-4 py-3 text-gray-600 text-xs hidden md:table-cell leading-relaxed">{RELEASE_SKILL.desc}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </Card>
+
+              {/* Config section */}
+              <div className="text-xs font-bold text-gray-600 uppercase tracking-wider px-1 pb-1 mt-4">⚙️ Configuración</div>
+              <Card className="overflow-hidden p-0">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b border-gray-100">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase w-8">#</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Skill</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase hidden md:table-cell">Qué hace</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {CONFIG_SKILLS.map(s => (
+                      <tr key={s.num} className="hover:bg-gray-50/60 transition-colors">
+                        <td className="px-4 py-3 text-gray-400 font-mono text-xs">{s.num}</td>
+                        <td className="px-4 py-3">
+                          <div className="font-mono font-semibold text-gray-700 text-xs mb-1">{s.name}</div>
                           <Badge color={s.color}>{s.badge}</Badge>
                         </td>
                         <td className="px-4 py-3 text-gray-600 text-xs hidden md:table-cell leading-relaxed">{s.desc}</td>
@@ -267,15 +364,21 @@ bash update-gideon.sh`}</Code>
 
               <Card>
                 <h3 className="font-semibold text-gray-800 mb-3">Flujo típico de un QA</h3>
-                <Code>{`1. /gideon → 1 → [B]       Ver mis matrices en QA Hub
-                   → [A]       Ver mis tickets en ClickUp
-2. /gideon → 2              Analizar ticket y generar Matriz
-3. Ejecutar pruebas manualmente
-4. /gideon → 3              Registrar resultados → QA Hub + ClickUp
+                <Code>{`── Análisis + Ejecución Automática ───────────────────
+1. /gideon → 1              MAS Conductor: analiza ticket + genera Matriz
+2. /gideon → 2              MAS-TEST: ejecuta pruebas Web/API en vivo
+3. /gideon → 3              MAS-MOBILE: ejecuta pruebas Android en vivo
+4. /gideon → 4              Paralelo: Web/API + Android simultáneamente
+
+── Flujo Manual ──────────────────────────────────────
+5. /gideon → 5 → [B]        Ver mis matrices en QA Hub
+              → [A]          Ver mis tickets en ClickUp
+6. /gideon → 6              Analizar ticket (modo clásico)
+7. /gideon → 7              Registrar resultados manuales → QA Hub + ClickUp
 
 ── Ciclos de Release ─────────────────────────────────
-5. /gideon → 6 → [2]       Publicar ciclo nuevo desde CSV/xlsx
-6. /gideon → 6 → [3]       Actualizar resultados en ciclo existente`}</Code>
+8. /gideon → 10 → [2]       Publicar ciclo nuevo desde CSV/xlsx
+9. /gideon → 10 → [3]       Actualizar resultados en ciclo existente`}</Code>
               </Card>
             </Section>
 
@@ -288,23 +391,32 @@ bash update-gideon.sh`}</Code>
                 </div>
                 <p className="text-sm text-gray-600 leading-relaxed mb-3">
                   El MAS (<strong>Multi-Agent System</strong>) es el flujo QA más avanzado de Gideon.
-                  En vez de un skill secuencial, orquesta <strong>agentes especializados en paralelo</strong>
-                  con circuit breaker, auto-revisión de matrices y contexto real del PR/MR.
+                  Tiene tres modos independientes que pueden usarse por separado o en conjunto:
                 </p>
-                <p className="text-sm text-gray-600 leading-relaxed">
-                  Se activa con <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">/gideon → 10</code> o
-                  escribiendo <em>"usa gideon-conductor"</em> directamente en el chat.
-                </p>
+                <div className="grid md:grid-cols-3 gap-3 text-xs">
+                  <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                    <p className="font-semibold text-purple-800 mb-1">1. MAS Conductor <span className="text-purple-400">/gideon → 1</span></p>
+                    <p className="text-purple-700 leading-relaxed">Análisis profundo: diff-bot + graph-bot + stress-heuristic en paralelo. Genera la Matriz y espera tu aprobación antes de continuar.</p>
+                  </div>
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <p className="font-semibold text-blue-800 mb-1">2. MAS-TEST <span className="text-blue-400">/gideon → 2</span></p>
+                    <p className="text-blue-700 leading-relaxed">Ejecuta casos UI/API/Stress con Playwright MCP. Task Queue: nunca detiene la cola por un fallo individual. Timeout de 60s por caso.</p>
+                  </div>
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                    <p className="font-semibold text-green-800 mb-1">3. MAS-MOBILE <span className="text-green-400">/gideon → 3</span></p>
+                    <p className="text-green-700 leading-relaxed">Ejecuta casos Android con Android MCP. healer-bot autocorrige selectores rotos. Timeout de 90s por caso (mobile es más lento).</p>
+                  </div>
+                </div>
               </Card>
 
-              {/* Architecture */}
+              {/* MAS Conductor — Arquitectura */}
               <Card>
-                <h3 className="font-semibold text-gray-800 mb-4">Arquitectura de Agentes</h3>
+                <h3 className="font-semibold text-gray-800 mb-4">MAS Conductor — Agentes (/gideon → 1)</h3>
                 <div className="space-y-3">
-                  {MAS_AGENTS.map(cluster => (
+                  {MAS_CONDUCTOR_AGENTS.map(cluster => (
                     <div key={cluster.cluster} className={`border rounded-lg p-3 ${cluster.color}`}>
                       <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
-                        Fase {cluster.cluster}
+                        Cluster {cluster.cluster}
                       </div>
                       <div className="space-y-2">
                         {cluster.agents.map(agent => (
@@ -319,27 +431,25 @@ bash update-gideon.sh`}</Code>
                 </div>
               </Card>
 
-              {/* 4 Phases */}
+              {/* MAS Conductor — Fases */}
               <Card>
-                <h3 className="font-semibold text-gray-800 mb-3">Las 4 Fases del MAS</h3>
+                <h3 className="font-semibold text-gray-800 mb-3">Las Fases del MAS Conductor</h3>
                 <Code>{`Fase 0 — Bootstrap
   Lee credentials.json, detecta sesiones interrumpidas,
   inicializa circuit breaker + session_id único.
 
-Fase 1 — Análisis (Analyst Cluster)
-  1A ticket-bot  → Extrae contexto completo del ticket ClickUp
-  1B diff-bot    → Lee patch real del PR (o git diff en modo Standard)
-  1B graph-bot   → Traversal 3 niveles: módulos directos → callers → transitivos
-  1B api-bot*    → Extrae endpoints del diff (* solo si tipo API/Mixed)
-  1C Auto-Review → El Conductor revisa su propia Matriz antes de mostrarla:
-                   Check 1: ¿Cada archivo del diff tiene caso de prueba?
-                   Check 2: ¿Cada regression_area tiene caso 🔄 Regresión?
-                   Check 3: ¿Cada Happy Path tiene Edge/Error case? (solo riesgo HIGH)
-  → Checkpoint 1: QA aprueba la Matriz antes de continuar
+Fase 1 — Análisis (Analyst Cluster, en paralelo)
+  ticket-bot         → Extrae contexto completo del ticket ClickUp
+  diff-bot           → Lee patch real del PR (o git diff en modo Standard)
+  graph-bot          → Traversal 3 niveles: módulos directos → callers → transitivos
+  stress-heuristic   → Autodetecta casos de Stress en el diff
+  api-contract-bot*  → Extrae endpoints del diff (* solo si tipo API/Mixed)
 
-Fase 2 — Ejecución Paralela (Executor Cluster)
-  ui-bot  + api-bot en PARALELO (según los tipos de casos de la Matriz)
-  → Checkpoint 2: QA decide qué hacer con los fallos (R=Reportar/C=Continuar/I=Ignorar)
+  Auto-Review — El Conductor revisa su propia Matriz:
+    Check 1: ¿Cada archivo del diff tiene caso de prueba?
+    Check 2: ¿Cada regression_area tiene caso 🔄 Regresión?
+    Check 3: ¿Cada Happy Path tiene Edge/Error case? (solo riesgo HIGH)
+  → Checkpoint: QA aprueba la Matriz antes de continuar
 
 Fase 3 — Automatización (Automator Cluster)
   code-gen-bot → Genera specs Playwright + fixtures JSON con Tessl
@@ -350,10 +460,82 @@ Fase 4 — Publicación (Publisher Cluster)
              → Veredicto final en ClickUp (qa-approved / qa-rejected)`}</Code>
               </Card>
 
+              {/* MAS-TEST — Agentes */}
+              <Card>
+                <h3 className="font-semibold text-gray-800 mb-4">MAS-TEST — Agentes (/gideon → 2)</h3>
+                <div className="space-y-3">
+                  {MAS_TEST_AGENTS.map(cluster => (
+                    <div key={cluster.cluster} className={`border rounded-lg p-3 ${cluster.color}`}>
+                      <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                        {cluster.cluster}
+                      </div>
+                      <div className="space-y-2">
+                        {cluster.agents.map(agent => (
+                          <div key={agent.name} className="flex gap-3">
+                            <code className="text-xs font-mono font-semibold text-gray-700 whitespace-nowrap pt-0.5">  {agent.name}</code>
+                            <p className="text-xs text-gray-600 leading-relaxed">{agent.desc}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3">
+                  <Code>{`Task Queue (tolerancia a fallos):
+
+Para cada caso PENDING en la cola:
+  1. Asigna al subagente: ui-bot / api-bot / stress-bot
+  2. Espera resultado (timeout: 60s)
+  3. Clasifica:
+     - PASS          → Estado = "✅ Aprobado"
+     - FAIL          → Estado = "❌ Fallido" + observación
+     - Sin respuesta → Estado = "⏱ TIMEOUT / REQUIRES_HUMAN"
+  4. Actualiza esa fila en el CSV inmediatamente
+  5. → Siguiente caso (nunca se detiene)
+
+Al terminar: POST agent-update-matrix-status → comentario ClickUp`}</Code>
+                </div>
+              </Card>
+
+              {/* MAS-MOBILE — Agentes */}
+              <Card>
+                <h3 className="font-semibold text-gray-800 mb-4">MAS-MOBILE — Agentes (/gideon → 3)</h3>
+                <div className="space-y-3">
+                  {MAS_MOBILE_AGENTS.map(cluster => (
+                    <div key={cluster.cluster} className={`border rounded-lg p-3 ${cluster.color}`}>
+                      <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                        {cluster.cluster}
+                      </div>
+                      <div className="space-y-2">
+                        {cluster.agents.map(agent => (
+                          <div key={agent.name} className="flex gap-3">
+                            <code className="text-xs font-mono font-semibold text-gray-700 whitespace-nowrap pt-0.5">  {agent.name}</code>
+                            <p className="text-xs text-gray-600 leading-relaxed">{agent.desc}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3">
+                  <Code>{`Tolerancia a fallos:
+
+Para cada caso MOBILE con Estado=PENDING:
+  1. Asigna al mobile-ui-bot o mobile-stress-bot
+  2. Si FAIL en 1er intento → healer-bot intenta autocorrección
+  3. Si FAIL en 2do intento → Estado = "❌ Fallido" + screenshot
+  4. Si crash de la app → reinicia: adb shell am force-stop {pkg}
+                           + Wait(3000) antes del siguiente caso
+
+Modo Híbrido: usa flows Maestro .yaml existentes en {mobile_dir}/flows/
+Al terminar: POST agent-update-matrix-status → comentario ClickUp`}</Code>
+                </div>
+              </Card>
+
               {/* MAS vs Manual */}
               <Card className="p-0 overflow-hidden">
                 <div className="px-5 py-3 bg-gray-50 border-b border-gray-200">
-                  <h3 className="text-sm font-semibold text-gray-800">¿MAS o skill manual?</h3>
+                  <h3 className="text-sm font-semibold text-gray-800">¿Qué modo usar?</h3>
                 </div>
                 <table className="w-full text-xs">
                   <thead className="bg-gray-50 border-b border-gray-200">
@@ -384,12 +566,12 @@ Fase 4 — Publicación (Publisher Cluster)
                   El estado se persiste en <code className="bg-gray-100 px-1 rounded text-xs">~/.gideon/&lt;proyecto&gt;/session_&lt;ticket&gt;_&lt;ts&gt;.json</code> —
                   si el IDE se cierra, el Conductor detecta la sesión y pregunta si reanudar.
                 </p>
-                <Code>{`ticket-bot falla  → ABORT — usar /gideon → 2 como fallback
+                <Code>{`ticket-bot falla  → ABORT — usar /gideon → 6 como fallback
 diff-bot PR-API   → fallback automático a git diff (Standard)
 diff-bot Standard → usar nombres de archivos inferibles del MR URL
 graph-bot CLI     → leer graph.json con Python directo
 graph-bot JSON    → skip análisis de regresión (no crítico)
-ui-bot            → REQUIRES_HUMAN los casos fallidos
+ui-bot / api-bot  → REQUIRES_HUMAN los casos fallidos (MAS-TEST)
 report-bot        → retry QA Hub → retry ClickUp → reporte en chat`}</Code>
               </Card>
 
@@ -400,7 +582,7 @@ report-bot        → retry QA Hub → retry ClickUp → reporte en chat`}</Code
                   <table className="w-full text-xs">
                     <thead className="bg-gray-50 border-b border-gray-200">
                       <tr>
-                        <th className="px-3 py-2 text-left font-semibold text-gray-500 uppercase">Fase</th>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-500 uppercase">Skill</th>
                         <th className="px-3 py-2 text-left font-semibold text-gray-500 uppercase">Agente</th>
                         <th className="px-3 py-2 text-left font-semibold text-gray-500 uppercase">Endpoint</th>
                         <th className="px-3 py-2 text-left font-semibold text-gray-500 uppercase">Qué hace</th>
@@ -408,24 +590,35 @@ report-bot        → retry QA Hub → retry ClickUp → reporte en chat`}</Code
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       <tr>
-                        <td className="px-3 py-2 text-gray-500">Fase 1</td>
-                        <td className="px-3 py-2 font-mono text-blue-800">ticket-bot → Conductor</td>
+                        <td className="px-3 py-2 text-purple-700 font-mono">Conductor</td>
+                        <td className="px-3 py-2 font-mono text-blue-800">ticket-bot</td>
                         <td className="px-3 py-2 font-mono text-emerald-700">agent-save-matrix</td>
                         <td className="px-3 py-2 text-gray-600">Publica la Matriz con todos los casos en PENDING</td>
                       </tr>
                       <tr>
-                        <td className="px-3 py-2 text-gray-500">Fase 4</td>
+                        <td className="px-3 py-2 text-purple-700 font-mono">Conductor</td>
                         <td className="px-3 py-2 font-mono text-blue-800">report-bot</td>
                         <td className="px-3 py-2 font-mono text-emerald-700">agent-update-matrix-status</td>
-                        <td className="px-3 py-2 text-gray-600">PATCH de statuses con los resultados reales de ui-bot/api-bot</td>
+                        <td className="px-3 py-2 text-gray-600">PATCH de statuses tras la ejecución</td>
+                      </tr>
+                      <tr>
+                        <td className="px-3 py-2 text-blue-700 font-mono">MAS-TEST</td>
+                        <td className="px-3 py-2 font-mono text-blue-800">Orchestrator</td>
+                        <td className="px-3 py-2 font-mono text-emerald-700">agent-update-matrix-status</td>
+                        <td className="px-3 py-2 text-gray-600">Actualiza statuses Web/API en la versión existente</td>
+                      </tr>
+                      <tr>
+                        <td className="px-3 py-2 text-green-700 font-mono">MAS-MOBILE</td>
+                        <td className="px-3 py-2 font-mono text-blue-800">Orchestrator</td>
+                        <td className="px-3 py-2 font-mono text-emerald-700">agent-update-matrix-status</td>
+                        <td className="px-3 py-2 text-gray-600">Actualiza statuses Mobile en la versión existente</td>
                       </tr>
                     </tbody>
                   </table>
                 </div>
                 <p className="mt-3 text-xs text-gray-500 leading-relaxed">
-                  <strong>report-bot</strong> y <strong>exploratory-tester</strong> son mutuamente excluyentes —
-                  nunca se usan los dos en la misma sesión. Si el MAS ejecutó las pruebas, report-bot actualiza QA Hub.
-                  Si el QA ejecutó manualmente, exploratory-tester hace lo mismo.
+                  MAS-TEST y MAS-MOBILE pueden ejecutarse sobre una misma Matriz (publicada por el Conductor).
+                  Cada uno actualiza solo sus rows correspondientes — los tipos de caso determinan qué bot los ejecuta.
                 </p>
               </Card>
 
@@ -575,15 +768,23 @@ report-bot        → retry QA Hub → retry ClickUp → reporte en chat`}</Code
                   <code className="block bg-gray-900 text-gray-100 text-xs font-mono p-4 rounded-lg leading-relaxed">
                     {'~/.gemini/config/plugins/gideon-qa-plugin/'}<br />
                     {'  skills/'}<br />
-                    {'    release-publisher/'}<br />
-                    {'      SKILL.md   ← edita este archivo'}<br />
-                    {'    ticket-analyst/'}<br />
-                    {'      SKILL.md'}<br />
-                    {'    exploratory-tester/'}<br />
-                    {'      SKILL.md'}<br />
                     {'    task-fetcher/'}<br />
                     {'      SKILL.md'}<br />
+                    {'    ticket-analyst/'}<br />
+                    {'      SKILL.md   ← heurística de Stress Testing'}<br />
+                    {'    exploratory-tester/'}<br />
+                    {'      SKILL.md   ← solo modo manual'}<br />
+                    {'    mas-test/'}<br />
+                    {'      SKILL.md   ← UI/API/Stress con Playwright MCP'}<br />
+                    {'    mas-mobile/'}<br />
+                    {'      SKILL.md   ← Android MCP + healer-bot'}<br />
+                    {'    release-publisher/'}<br />
+                    {'      SKILL.md'}<br />
                     {'    suite-automator/'}<br />
+                    {'      SKILL.md'}<br />
+                    {'    suite-planner/'}<br />
+                    {'      SKILL.md'}<br />
+                    {'    mobile-automator/'}<br />
                     {'      SKILL.md'}<br />
                     {'    setup-clickup/'}<br />
                     {'      SKILL.md'}<br />
