@@ -4,8 +4,9 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase/client';
 import {
   FolderOpen, Search, FlaskConical, ChevronDown,
-  ExternalLink, ChevronLeft, ChevronRight, Trash2, Pencil
+  ChevronLeft, ChevronRight, Trash2, Pencil, Calendar
 } from 'lucide-react';
+import ViewPublicButton from '../components/shared/ViewPublicButton';
 import {
   deletePersonalMatrixVersion,
   deletePersonalMatrixFolder,
@@ -60,8 +61,12 @@ export default function MySpace() {
   const [folders, setFolders] = useState<Folder[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [dateSort, setDateSort] = useState<'desc' | 'asc'>('desc');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [page, setPage] = useState(1);
   const [expandedTickets, setExpandedTickets] = useState<Set<string>>(new Set());
+  const [defaultExpanded, setDefaultExpanded] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -87,13 +92,24 @@ export default function MySpace() {
     loadFolders();
   }, [user?.email]);
 
-  // Reset page when search changes
-  useEffect(() => { setPage(1); }, [search]);
+  // Reset page when filters change
+  useEffect(() => { setPage(1); }, [search, dateSort, startDate, endDate]);
 
-  const filtered = folders.filter(f =>
-    f.ticket_id.toLowerCase().includes(search.toLowerCase()) ||
-    f.project_name.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = folders
+    .filter(f =>
+      f.ticket_id.toLowerCase().includes(search.toLowerCase()) ||
+      f.project_name.toLowerCase().includes(search.toLowerCase())
+    )
+    .filter(f => {
+      const d = new Date(f.created_at);
+      if (startDate && d < new Date(startDate)) return false;
+      if (endDate   && d > new Date(endDate + 'T23:59:59')) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      const diff = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      return dateSort === 'asc' ? diff : -diff;
+    });
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -105,6 +121,16 @@ export default function MySpace() {
       else next.add(ticketId);
       return next;
     });
+  };
+
+  const toggleAllFolders = () => {
+    if (defaultExpanded) {
+      setExpandedTickets(new Set());
+      setDefaultExpanded(false);
+    } else {
+      setExpandedTickets(new Set(paginated.map(f => f.ticket_id)));
+      setDefaultExpanded(true);
+    }
   };
 
   // ── Borrar una versión individual ────────────────────────────────────────────
@@ -180,16 +206,48 @@ export default function MySpace() {
         )}
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-xs">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-        <input
-          type="text"
-          placeholder="Buscar por ticket o proyecto…"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-        />
+      {/* Filter bar — matches Cycles.tsx */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex flex-col gap-3">
+        {/* Search + Sort row */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Buscar por ticket o proyecto…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <select
+            value={dateSort}
+            onChange={e => setDateSort(e.target.value as 'desc' | 'asc')}
+            className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="desc">Más reciente primero</option>
+            <option value="asc">Más antiguo primero</option>
+          </select>
+        </div>
+        {/* Date range + Expand toggle row */}
+        <div className="flex flex-wrap gap-3 items-center">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0" />
+            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <span className="text-gray-400 text-sm">→</span>
+            <input type="date" value={endDate}   onChange={e => setEndDate(e.target.value)}   className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div className="flex items-center gap-2 ml-auto">
+            <button
+              onClick={toggleAllFolders}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${defaultExpanded ? 'bg-blue-600' : 'bg-gray-300'}`}
+              title={defaultExpanded ? 'Colapsar todo' : 'Expandir todo'}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition-transform ${defaultExpanded ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+            <span className="text-sm text-gray-500 whitespace-nowrap">{defaultExpanded ? 'Colapsar todo' : 'Expandir todo'}</span>
+          </div>
+        </div>
       </div>
 
       {/* Content */}
@@ -299,15 +357,10 @@ export default function MySpace() {
                               </div>
                               {/* Acciones de versión */}
                               <div className="flex items-center gap-2 flex-shrink-0 ml-4">
-                                <a
-                                  href={`${window.location.origin}/#/m/${v.public_uuid}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  onClick={e => e.stopPropagation()}
-                                  className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-3 py-1.5 rounded-lg transition-colors"
-                                >
-                                  Ver <ExternalLink className="w-3 h-3" />
-                                </a>
+                                <ViewPublicButton
+                                  url={`${window.location.origin}/#/m/${v.public_uuid}`}
+                                  title="Ver matriz pública"
+                                />
                                 <button
                                   onClick={e => { e.stopPropagation(); navigate(`/my-space/${folder.ticket_id}/${v.id}`); }}
                                   className="flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-3 py-1.5 rounded-lg transition-colors"
