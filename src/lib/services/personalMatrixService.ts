@@ -113,12 +113,17 @@ export type MatrixData = {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-/** Mapea valores de status con emojis/texto a strings limpios */
-function cleanStatusValue(val: string): string {
+/**
+ * Mapea valores de status con emojis/texto a strings limpios.
+ * Soporta variantes con texto ("✅ Aprobado", "⚠️ GAP", "REQUIRES_HUMAN", etc.)
+ */
+export function cleanStatusValue(val: string): string {
   const v = val.trim();
-  if (v.includes('PASS') || v === '✅') return 'PASS';
-  if (v.includes('FAIL') || v === '❌') return 'FAIL';
-  if (v.includes('BLOCKED') || v === '🚫') return 'BLOCKED';
+  const lo = v.toLowerCase();
+  if (v.includes('PASS') || v.includes('✅') || lo.includes('aprobado')) return 'PASS';
+  if (v.includes('FAIL') || v.includes('❌') || lo.includes('fallido') || lo.includes('rechazado')) return 'FAIL';
+  if (v.includes('BLOCKED') || v.includes('🚫') || lo.includes('bloqueado')) return 'BLOCKED';
+  // PENDING: gap documentado, requires_human, pending, cualquier otro
   return 'PENDING';
 }
 

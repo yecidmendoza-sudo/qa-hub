@@ -8,6 +8,7 @@ import {
   updatePersonalMatrixData,
   getPersonalMatrixVersion,
   normalizeSections,
+  cleanStatusValue,
   type MatrixSection,
   type MatrixCol,
   type MatrixRow,
@@ -58,6 +59,22 @@ export default function MySpaceMatrix() {
         if (version.matrix_data) {
           // Use stored JSONB — normalize to sections (handles legacy {columns,rows} format too)
           secs = normalizeSections(version.matrix_data as { sections?: MatrixSection[]; columns?: MatrixCol[]; rows?: MatrixRow[] });
+          // Re-normalize status cells: agent-save-matrix may store raw text ("✅ Aprobado")
+          // instead of the canonical enum value ('PASS'/'FAIL'/'BLOCKED'/'PENDING').
+          secs = secs.map(sec => ({
+            ...sec,
+            rows: sec.rows.map(row => ({
+              ...row,
+              cells: Object.fromEntries(
+                sec.columns.map(col => [
+                  col.id,
+                  col.type === 'status'
+                    ? cleanStatusValue(row.cells[col.id] ?? 'PENDING')
+                    : (row.cells[col.id] ?? '')
+                ])
+              ),
+            })),
+          }));
         } else if (version.content_md) {
           // Parse markdown → extract ALL tables as sections. Do NOT auto-save here.
           const parsed = parseMarkdownToMatrixData(version.content_md);
