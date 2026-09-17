@@ -21,14 +21,16 @@ import TextCellPopover from '../components/matrix/TextCellPopover';
 // ─── Status helpers ───────────────────────────────────────────────────────────
 
 const STATUS_SELECT_CLS: Record<string, string> = {
-  PASS:    'bg-green-100 text-green-800 border-green-300 focus:ring-green-400',
-  FAIL:    'bg-red-100   text-red-800   border-red-300   focus:ring-red-400',
-  BLOCKED: 'bg-yellow-100 text-yellow-800 border-yellow-300 focus:ring-yellow-400',
-  PENDING: 'bg-gray-100  text-gray-700  border-gray-300  focus:ring-gray-400',
+  PASS:        'bg-green-100  text-green-800  border-green-300  focus:ring-green-400',
+  FAIL:        'bg-red-100    text-red-800    border-red-300    focus:ring-red-400',
+  BLOCKED:     'bg-yellow-100 text-yellow-800 border-yellow-300 focus:ring-yellow-400',
+  SKIP:        'bg-slate-100  text-slate-700  border-slate-300  focus:ring-slate-400',
+  IMPROVEMENT: 'bg-purple-100 text-purple-800 border-purple-300 focus:ring-purple-400',
+  PENDING:     'bg-gray-100   text-gray-700   border-gray-300   focus:ring-gray-400',
 };
 
 const STATUS_ICON: Record<string, string> = {
-  PASS: '✅', FAIL: '❌', BLOCKED: '⚠️', PENDING: '⏳',
+  PASS: '✅', FAIL: '❌', BLOCKED: '⚠️', SKIP: '⏭️', IMPROVEMENT: '💡', PENDING: '⏳',
 };
 
 
@@ -152,12 +154,13 @@ export default function Matrix() {
 
   const total = cases.length;
 
-  const statusCounts = { PASS: 0, FAIL: 0, BLOCKED: 0, PENDING: 0 } as Record<string, number>;
+  const statusCounts = { PASS: 0, FAIL: 0, BLOCKED: 0, SKIP: 0, IMPROVEMENT: 0, PENDING: 0 } as Record<string, number>;
   cases.forEach(c => {
     const s = c.executions?.[0]?.status || 'PENDING';
     statusCounts[s] = (statusCounts[s] || 0) + 1;
   });
-  const completed = (statusCounts.PASS || 0) + (statusCounts.FAIL || 0);
+  // Progress: PASS + FAIL mark a case as evaluated (closed). SKIP/IMPROVEMENT are also closed.
+  const completed = (statusCounts.PASS || 0) + (statusCounts.FAIL || 0) + (statusCounts.SKIP || 0) + (statusCounts.IMPROVEMENT || 0);
   const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
 
   // ── Filters ───────────────────────────────────────────────────────────────────
@@ -278,7 +281,7 @@ export default function Matrix() {
           className="text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-400 text-gray-700"
         >
           <option value="ALL">Todos los estados</option>
-          {['PENDING', 'PASS', 'FAIL', 'BLOCKED'].map(s => (
+          {['PENDING', 'PASS', 'FAIL', 'BLOCKED', 'SKIP', 'IMPROVEMENT'].map(s => (
             <option key={s} value={s}>{STATUS_ICON[s]} {s} ({statusCounts[s] || 0})</option>
           ))}
         </select>
@@ -497,9 +500,11 @@ export default function Matrix() {
 
                     {/* Estado — sticky, colored select (merged Status + Action) */}
                     <td className={`px-3 py-2 whitespace-nowrap sticky right-0 border-l border-gray-200 transition-colors ${
-                      currentStatus === 'PASS'    ? 'bg-green-50/80' :
-                      currentStatus === 'FAIL'    ? 'bg-red-50/80' :
-                      currentStatus === 'BLOCKED' ? 'bg-yellow-50/80' :
+                      currentStatus === 'PASS'        ? 'bg-green-50/80'  :
+                      currentStatus === 'FAIL'        ? 'bg-red-50/80'    :
+                      currentStatus === 'BLOCKED'     ? 'bg-yellow-50/80' :
+                      currentStatus === 'SKIP'        ? 'bg-slate-50/80'  :
+                      currentStatus === 'IMPROVEMENT' ? 'bg-purple-50/80' :
                       'bg-gray-50/80'
                     }`}>
                       <div className="flex items-center gap-1.5">
@@ -512,6 +517,8 @@ export default function Matrix() {
                           <option value="PASS">✅ PASS</option>
                           <option value="FAIL">❌ FAIL</option>
                           <option value="BLOCKED">⚠️ BLOCKED</option>
+                          <option value="SKIP">⏭️ SKIP</option>
+                          <option value="IMPROVEMENT">💡 IMPROVEMENT</option>
                         </select>
                         {canManage && (
                           <button

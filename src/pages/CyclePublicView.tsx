@@ -3,11 +3,12 @@ import { useParams } from 'react-router-dom';
 
 // ── Status helpers ────────────────────────────────────────────────────────────
 const STATUS_BADGE_CLS: Record<string, string> = {
-  PASS:    'bg-green-900  text-green-300',
-  FAIL:    'bg-red-900    text-red-300',
-  BLOCKED: 'bg-orange-900 text-orange-300',
-  PENDING: 'bg-gray-700   text-gray-300',
-  SKIP:    'bg-blue-900   text-blue-300',
+  PASS:        'bg-green-900  text-green-300',
+  FAIL:        'bg-red-900    text-red-300',
+  BLOCKED:     'bg-orange-900 text-orange-300',
+  PENDING:     'bg-gray-700   text-gray-300',
+  SKIP:        'bg-blue-900   text-blue-300',
+  IMPROVEMENT: 'bg-purple-900 text-purple-300',
 };
 
 const CYCLE_TYPE_CLS: Record<string, string> = {

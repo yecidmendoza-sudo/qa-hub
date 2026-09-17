@@ -60,12 +60,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     if (casesError) throw new Error(`Cases fetch failed: ${casesError.message}`);
 
-    // 3. Fetch executions
-    const caseIds = (cases ?? []).map((c) => c.id);
+    // 3. Fetch executions — query by cycle_id directly (avoids .in() URL-length limit
+    //    with large case sets, e.g. 150+ cases in a REGRESSION cycle).
     const { data: executions, error: execError } = await supabase
       .from("test_executions")
       .select("id, case_id, status, observation")
-      .in("case_id", caseIds);
+      .eq("cycle_id", cycleId);
 
     if (execError) throw new Error(`Executions fetch failed: ${execError.message}`);
 
