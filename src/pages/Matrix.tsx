@@ -410,21 +410,21 @@ export default function Matrix() {
         <table className="min-w-full text-left border-collapse">
           <thead>
             {isHierarchical ? (() => {
-              const { hierarchyHeaders, dataHeaders } = buildHierarchicalHeaders(filteredCases, effectiveCols);
+              const { numLevels, levelLabels, dataCols: hierDataCols } = buildHierarchicalHeaders(filteredCases, effectiveCols);
               return (
-                <tr className="border-b border-blue-100">
-                  <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[50px] sticky top-0 z-20 bg-blue-50">#</th>
-                  {hierarchyHeaders.map((label, i) => (
-                    <th key={`hier-h-${i}`} className="px-3 py-2 text-xs font-bold text-slate-700 uppercase min-w-[110px] sticky top-0 z-20 bg-slate-100 border-r border-slate-300">
-                      {label}
+                <tr className="border-b-2 border-slate-300 bg-slate-50">
+                  <th className="px-3 py-2 text-xs font-bold text-slate-600 uppercase w-[50px] sticky top-0 z-20 bg-slate-50 border-r border-slate-200">#</th>
+                  {Array.from({ length: numLevels }, (_, i) => (
+                    <th key={`hier-h-${i}`} className="px-3 py-2 text-xs font-bold text-slate-700 uppercase min-w-[110px] sticky top-0 z-20 bg-slate-100 border-r-2 border-slate-300">
+                      {levelLabels[i]}
                     </th>
                   ))}
-                  {dataHeaders.map((col: any) => (
-                    <th key={col.id} className={`px-3 py-2 text-xs font-bold uppercase min-w-[140px] sticky top-0 z-20 select-none ${col.id?.startsWith('_') ? 'text-blue-900 bg-blue-50' : 'text-indigo-900 bg-indigo-50 border-l border-indigo-100'}`}>
+                  {hierDataCols.map((col: any) => (
+                    <th key={col.id} className={`px-3 py-2 text-xs font-bold uppercase min-w-[130px] sticky top-0 z-20 border-r ${col.id?.startsWith('_') ? 'text-blue-900 bg-blue-50 border-blue-200' : 'text-indigo-900 bg-indigo-50 border-indigo-200'}`}>
                       {col.name}
                     </th>
                   ))}
-                  <th className="px-3 py-2 text-xs font-bold text-blue-900 uppercase min-w-[140px] sticky top-0 right-0 z-30 bg-blue-50 border-l border-blue-200 shadow-l">
+                  <th className="px-3 py-2 text-xs font-bold text-blue-900 uppercase min-w-[150px] sticky top-0 right-0 z-30 bg-blue-50 border-l-2 border-blue-200">
                     Estado
                   </th>
                 </tr>
