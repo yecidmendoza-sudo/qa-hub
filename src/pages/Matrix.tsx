@@ -18,6 +18,7 @@ import {
 import AddColumnModal from '../components/matrix/AddColumnModal';
 import CsvImporter from '../components/matrix/CsvImporter';
 import TextCellPopover from '../components/matrix/TextCellPopover';
+import HierarchicalMatrix, { buildHierarchicalHeaders } from '../components/matrix/HierarchicalMatrix';
 
 // ─── Status helpers ───────────────────────────────────────────────────────────
 
@@ -51,9 +52,6 @@ export default function Matrix() {
   // Sort
   const [sortCol, setSortCol] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
-  
-  // Hierarchical display state
-  const [collapsedPaths, setCollapsedPaths] = useState<Set<string>>(new Set());
 
   const canManage = ['ADMIN', 'QA_LEAD'].includes(profile?.role ?? '');
 
@@ -214,29 +212,6 @@ export default function Matrix() {
     }
     return result;
   }, [cases, filterText, filterStatus, filterReviewer, colFilters, sortCol, sortDir]); // eslint-disable-line react-hooks/exhaustive-deps
-  const visibleCases = useMemo(() => {
-    return filteredCases.filter(c => {
-      const path = c.custom_data?.hierarchy_path as string | undefined;
-      if (!path) return true;
-      
-      const parts = path.split(' > ');
-      // Check if any ancestor path is collapsed
-      for (let i = 1; i < parts.length; i++) {
-        const ancestorPath = parts.slice(0, i).join(' > ');
-        if (collapsedPaths.has(ancestorPath)) return false;
-      }
-      return true;
-    });
-  }, [filteredCases, collapsedPaths]);
-
-  const toggleCollapse = (path: string) => {
-    setCollapsedPaths(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(path)) newSet.delete(path);
-      else newSet.add(path);
-      return newSet;
-    });
-  };
 
   // ── Early returns (after ALL hooks) ───────────────────────────────────────
   if (loading) return <div className="p-8 text-gray-500">Cargando matriz...</div>;
@@ -434,310 +409,334 @@ export default function Matrix() {
       <div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-x-auto pb-32">
         <table className="min-w-full text-left border-collapse">
           <thead>
-            <tr className="border-b border-blue-100">
-              {/* # — always first */}
-              <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[60px] sticky top-0 z-20 bg-blue-50">#</th>
-
-              {isDataDriven ? (
-                /* DATA-DRIVEN: render columns exactly as defined in custom_columns */
-                effectiveCols.map((col: any) => {
-                  const isSorted = sortCol === col.id;
-                  const isReserved = col.id?.startsWith('_');
-                  return (
-                    <th
-                      key={col.id}
-                      className={`group px-3 py-3 text-xs font-bold uppercase min-w-[160px] sticky top-0 z-20 select-none ${
-                        isReserved
-                          ? 'text-blue-900 bg-blue-50'
-                          : 'text-indigo-900 bg-indigo-50 border-l border-indigo-100'
-                      }`}
-                    >
-                      <div className="flex items-center gap-1">
-                        {/* Sortable name */}
-                        <button
-                          onClick={() => handleSortCol(col.id)}
-                          className="flex items-center gap-0.5 hover:text-blue-600 transition-colors min-w-0 flex-1 text-left"
-                          title={`Ordenar por ${col.name}`}
-                        >
-                          <span className="truncate">{col.name}</span>
-                          {isSorted
-                            ? sortDir === 'asc'
-                              ? <ChevronUp className="w-3 h-3 flex-shrink-0 text-blue-500" />
-                              : <ChevronDown className="w-3 h-3 flex-shrink-0 text-blue-500" />
-                            : <ChevronUp className="w-3 h-3 flex-shrink-0 opacity-0 group-hover:opacity-30" />
-                          }
-                        </button>
-                        {/* Column filter button */}
-                        <ColumnFilterDropdown
-                          colId={col.id}
-                          colName={col.name}
-                          uniqueValues={columnUniqueValues[col.id] || []}
-                          selected={colFilters[col.id] || new Set()}
-                          onApply={(sel) => setColFilters(prev => ({ ...prev, [col.id]: sel }))}
-                          onClear={() => setColFilters(prev => { const n = { ...prev }; delete n[col.id]; return n; })}
-                        />
-                        {/* Delete button (custom cols only) */}
-                        {!isReserved && canManage && (
-                          <button
-                            onClick={() => handleDeleteColumn(col.id)}
-                            className="opacity-0 group-hover:opacity-100 text-indigo-300 hover:text-red-500 transition-opacity p-0.5 rounded flex-shrink-0"
-                            title="Eliminar columna"
-                          >✕</button>
-                        )}
-                        {isReserved && (
-                          <span
-                            title="Columna estructural — no se puede eliminar"
-                            className="opacity-0 group-hover:opacity-60 text-blue-400 text-[10px] cursor-help transition-opacity flex-shrink-0"
-                          >🔒</span>
-                        )}
-                      </div>
+            {isHierarchical ? (() => {
+              const { hierarchyHeaders, dataHeaders } = buildHierarchicalHeaders(filteredCases, effectiveCols);
+              return (
+                <tr className="border-b border-blue-100">
+                  <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[50px] sticky top-0 z-20 bg-blue-50">#</th>
+                  {hierarchyHeaders.map((label, i) => (
+                    <th key={`hier-h-${i}`} className="px-3 py-2 text-xs font-bold text-slate-700 uppercase min-w-[110px] sticky top-0 z-20 bg-slate-100 border-r border-slate-300">
+                      {label}
                     </th>
-                  );
-                })
-              ) : (
-                /* LEGACY: hardcoded fixed cols + custom cols + observation */
-                <>
-                  {[{ id: '_title', name: 'Task Name' }, { id: '_module', name: 'Módulo / Vía' }, { id: '_expected_result', name: 'Expected Result' }].map(hcol => {
-                    const isSorted = sortCol === hcol.id;
+                  ))}
+                  {dataHeaders.map((col: any) => (
+                    <th key={col.id} className={`px-3 py-2 text-xs font-bold uppercase min-w-[140px] sticky top-0 z-20 select-none ${col.id?.startsWith('_') ? 'text-blue-900 bg-blue-50' : 'text-indigo-900 bg-indigo-50 border-l border-indigo-100'}`}>
+                      {col.name}
+                    </th>
+                  ))}
+                  <th className="px-3 py-2 text-xs font-bold text-blue-900 uppercase min-w-[140px] sticky top-0 right-0 z-30 bg-blue-50 border-l border-blue-200 shadow-l">
+                    Estado
+                  </th>
+                </tr>
+              );
+            })() : (
+              <tr className="border-b border-blue-100">
+                {/* # — always first */}
+                <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[60px] sticky top-0 z-20 bg-blue-50">#</th>
+
+                {isDataDriven ? (
+                  /* DATA-DRIVEN: render columns exactly as defined in custom_columns */
+                  effectiveCols.map((col: any) => {
+                    const isSorted = sortCol === col.id;
+                    const isReserved = col.id?.startsWith('_');
                     return (
-                      <th key={hcol.id} className="group px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[200px] sticky top-0 z-20 bg-blue-50 select-none">
+                      <th
+                        key={col.id}
+                        className={`group px-3 py-3 text-xs font-bold uppercase min-w-[160px] sticky top-0 z-20 select-none ${
+                          isReserved
+                            ? 'text-blue-900 bg-blue-50'
+                            : 'text-indigo-900 bg-indigo-50 border-l border-indigo-100'
+                        }`}
+                      >
                         <div className="flex items-center gap-1">
-                          <button onClick={() => handleSortCol(hcol.id)} className="flex items-center gap-0.5 hover:text-blue-600 transition-colors flex-1 text-left">
-                            <span>{hcol.name}</span>
-                            {isSorted ? (sortDir === 'asc' ? <ChevronUp className="w-3 h-3 text-blue-500" /> : <ChevronDown className="w-3 h-3 text-blue-500" />) : <ChevronUp className="w-3 h-3 opacity-0 group-hover:opacity-30" />}
+                          <button
+                            onClick={() => handleSortCol(col.id)}
+                            className="flex items-center gap-0.5 hover:text-blue-600 transition-colors min-w-0 flex-1 text-left"
+                            title={`Ordenar por ${col.name}`}
+                          >
+                            <span className="truncate">{col.name}</span>
+                            {isSorted
+                              ? sortDir === 'asc'
+                                ? <ChevronUp className="w-3 h-3 flex-shrink-0 text-blue-500" />
+                                : <ChevronDown className="w-3 h-3 flex-shrink-0 text-blue-500" />
+                              : <ChevronUp className="w-3 h-3 flex-shrink-0 opacity-0 group-hover:opacity-30" />
+                            }
                           </button>
-                          <ColumnFilterDropdown colId={hcol.id} colName={hcol.name} uniqueValues={columnUniqueValues[hcol.id] || []} selected={colFilters[hcol.id] || new Set()} onApply={(sel) => setColFilters(prev => ({ ...prev, [hcol.id]: sel }))} onClear={() => setColFilters(prev => { const n = { ...prev }; delete n[hcol.id]; return n; })} />
+                          <ColumnFilterDropdown
+                            colId={col.id}
+                            colName={col.name}
+                            uniqueValues={columnUniqueValues[col.id] || []}
+                            selected={colFilters[col.id] || new Set()}
+                            onApply={(sel) => setColFilters(prev => ({ ...prev, [col.id]: sel }))}
+                            onClear={() => setColFilters(prev => { const n = { ...prev }; delete n[col.id]; return n; })}
+                          />
+                          {!isReserved && canManage && (
+                            <button
+                              onClick={() => handleDeleteColumn(col.id)}
+                              className="opacity-0 group-hover:opacity-100 text-indigo-300 hover:text-red-500 transition-opacity p-0.5 rounded flex-shrink-0"
+                              title="Eliminar columna"
+                            >✕</button>
+                          )}
+                          {isReserved && (
+                            <span
+                              title="Columna estructural — no se puede eliminar"
+                              className="opacity-0 group-hover:opacity-60 text-blue-400 text-[10px] cursor-help transition-opacity flex-shrink-0"
+                            >🔒</span>
+                          )}
                         </div>
                       </th>
                     );
-                  })}
-                  {customCols.map((col: any) => (
-                    <th
-                      key={col.id || col.name}
-                      className="group px-3 py-3 text-xs font-bold text-indigo-900 uppercase min-w-[160px] bg-indigo-50 border-l border-indigo-100 sticky top-0 z-20 select-none"
-                    >
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => handleSortCol(col.id)} className="flex items-center gap-0.5 hover:text-indigo-600 transition-colors flex-1 text-left">
-                          <span>{col.name}</span>
-                          {sortCol === col.id ? (sortDir === 'asc' ? <ChevronUp className="w-3 h-3 text-indigo-500" /> : <ChevronDown className="w-3 h-3 text-indigo-500" />) : <ChevronUp className="w-3 h-3 opacity-0 group-hover:opacity-30" />}
-                        </button>
-                        <ColumnFilterDropdown colId={col.id} colName={col.name} uniqueValues={columnUniqueValues[col.id] || []} selected={colFilters[col.id] || new Set()} onApply={(sel) => setColFilters(prev => ({ ...prev, [col.id]: sel }))} onClear={() => setColFilters(prev => { const n = { ...prev }; delete n[col.id]; return n; })} />
-                        {canManage && (
-                          <button onClick={() => handleDeleteColumn(col.id || col.name)} className="opacity-0 group-hover:opacity-100 text-indigo-300 hover:text-red-500 transition-opacity p-0.5 rounded" title="Eliminar columna">✕</button>
-                        )}
-                      </div>
-                    </th>
-                  ))}
-                  <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[180px] border-l border-blue-100 sticky top-0 z-20 bg-blue-50">Observación</th>
-                </>
-              )}
-
-              {/* Estado — always last, sticky right */}
-              <th className="group px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[140px] sticky top-0 right-0 z-30 bg-blue-50 border-l border-blue-200 shadow-l select-none">
-                <div className="flex items-center gap-1">
-                  <button onClick={() => handleSortCol('__status__')} className="flex items-center gap-0.5 hover:text-blue-600 transition-colors flex-1 text-left">
-                    <span>Estado</span>
-                    {sortCol === '__status__' ? (sortDir === 'asc' ? <ChevronUp className="w-3 h-3 text-blue-500" /> : <ChevronDown className="w-3 h-3 text-blue-500" />) : <ChevronUp className="w-3 h-3 opacity-0 group-hover:opacity-30" />}
-                  </button>
-                  <ColumnFilterDropdown
-                    colId="__status__"
-                    colName="Estado"
-                    uniqueValues={columnUniqueValues['__status__'] || []}
-                    selected={colFilters['__status__'] || new Set()}
-                    onApply={(sel) => setColFilters(prev => ({ ...prev, __status__: sel }))}
-                    onClear={() => setColFilters(prev => { const n = { ...prev }; delete n['__status__']; return n; })}
-                    formatLabel={(v) => `${STATUS_ICON[v] || ''} ${v}`}
-                  />
-                </div>
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {visibleCases.length === 0 ? (
-              <tr>
-                <td colSpan={3 + effectiveCols.length} className="px-6 py-8 text-center text-gray-400">
-                  {cases.length === 0
-                    ? 'No hay casos de prueba. Añade uno manualmente o importa un CSV.'
-                    : `No hay resultados para los filtros aplicados. (${total} casos en total)`
-                  }
-                </td>
-              </tr>
-            ) : (
-              visibleCases.map((c, index) => {
-                const execution = c.executions?.[0] || { status: 'PENDING', observation: '' };
-                const customData = c.custom_data || {};
-                const currentStatus: string = execution.status || 'PENDING';
-                
-                const depth = isHierarchical ? parseInt(customData.hierarchy_depth || '0', 10) : 0;
-                const path = customData.hierarchy_path || '';
-                const isCollapsed = collapsedPaths.has(path);
-                // Simple heuristic to check if it has children: if the next case in filteredCases starts with this path + ' > '
-                const cIndex = filteredCases.findIndex(row => row.id === c.id);
-                const hasChildren = isHierarchical && cIndex < filteredCases.length - 1 && 
-                  (filteredCases[cIndex + 1]?.custom_data?.hierarchy_path || '').startsWith(path + ' > ');
-
-                return (
-                  <tr key={c.id} className={`hover:bg-gray-50/60 transition-colors group ${isHierarchical && depth === 0 ? 'bg-indigo-50/30 font-semibold' : ''}`}>
-                    {/* # */}
-                    <td className="px-3 py-2 text-xs font-bold text-blue-500 whitespace-nowrap">
-                      {index + 1}
-                    </td>
-
-                {isDataDriven ? (
-                  /* DATA-DRIVEN CELLS: render in effectiveCols order, reserved IDs map to DB fields */
-                  effectiveCols.map((col: any) => {
-                    if (col.id === '_title') return (
-                      <td key="_title" className="px-3 py-2 text-xs text-gray-700 max-w-[220px]">
-                        <div className="flex items-center gap-1" style={{ paddingLeft: isHierarchical ? `${depth * 1.5}rem` : undefined }}>
-                          {isHierarchical && hasChildren && (
-                            <button onClick={() => toggleCollapse(path)} className="text-gray-400 hover:text-gray-700 w-4 h-4 flex items-center justify-center rounded bg-gray-100/50">
-                              {isCollapsed ? '▶' : '▼'}
-                            </button>
-                          )}
-                          {!hasChildren && isHierarchical && <div className="w-4 h-4" />}
-                          <div className="max-w-[210px] overflow-hidden flex-1">
-                            <TextCellPopover value={c.title || ''} onSave={val => handleCellBlur(c.id, 'title', val)} placeholder="Nombre del caso..." />
-                          </div>
-                        </div>
-                      </td>
-                    );
-                    if (col.id === '_module') return (
-                      <td key="_module" className="px-3 py-2 text-xs text-gray-600 max-w-[140px]">
-                        <div className="max-w-[130px] overflow-hidden">
-                          <input type="text" defaultValue={c.module} onBlur={e => handleCellBlur(c.id, 'module', e.target.value)}
-                            className="w-full bg-transparent border-b border-transparent focus:border-blue-500 focus:outline-none text-xs" />
-                        </div>
-                      </td>
-                    );
-                    if (col.id === '_expected_result') return (
-                      <td key="_expected_result" className="px-3 py-2 text-xs text-gray-600 border-l border-gray-100 max-w-[200px]">
-                        <div className="max-w-[190px] overflow-hidden">
-                          <TextCellPopover value={c.expected_result || ''} onSave={val => handleCellBlur(c.id, 'expected_result', val)} placeholder="Resultado esperado..." />
-                        </div>
-                      </td>
-                    );
-                    if (col.id === '_observation') return (
-                      <td key="_observation" className="px-3 py-2 text-xs text-gray-600 border-l border-gray-100 max-w-[200px]">
-                        <TextCellPopover value={execution.observation || ''} onSave={val => execution.id ? updateObservation(execution.id, val) : Promise.resolve()} placeholder="Sin notas..." />
-                      </td>
-                    );
-                    // Custom (non-reserved) column
-                    return (
-                      <td key={col.id} className="px-3 py-2 border-l border-gray-100 bg-indigo-50/20 min-w-[160px]">
-                        <div className="max-w-[200px] overflow-hidden">
-                          {col.type === 'dropdown' ? (
-                            <select
-                              value={customData[col.id] || ''}
-                              onChange={e => handleCustomDataChange(c.id, customData, col.id, e.target.value)}
-                              className="w-full text-xs bg-white border border-gray-200 rounded-md px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-400 text-gray-700"
-                            >
-                              <option value="">— Seleccionar —</option>
-                              {col.options?.map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
-                            </select>
-                          ) : (
-                            <TextCellPopover value={customData[col.id] || ''} onSave={val => handleCustomDataChange(c.id, customData, col.id, val)} placeholder="..." />
-                          )}
-                        </div>
-                      </td>
-                    );
                   })
                 ) : (
-                  /* LEGACY CELLS */
+                  /* LEGACY: hardcoded fixed cols + custom cols + observation */
                   <>
-                    <td className="px-3 py-2 text-xs text-gray-700 max-w-[220px]">
-                      <div className="flex items-center gap-1" style={{ paddingLeft: isHierarchical ? `${depth * 1.5}rem` : undefined }}>
-                        {isHierarchical && hasChildren && (
-                          <button onClick={() => toggleCollapse(path)} className="text-gray-400 hover:text-gray-700 w-4 h-4 flex items-center justify-center rounded bg-gray-100/50">
-                            {isCollapsed ? '▶' : '▼'}
-                          </button>
-                        )}
-                        {!hasChildren && isHierarchical && <div className="w-4 h-4" />}
-                        <div className="max-w-[210px] overflow-hidden flex-1">
-                          <TextCellPopover value={c.title || ''} onSave={val => handleCellBlur(c.id, 'title', val)} placeholder="Nombre del caso..." />
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2 text-xs text-gray-600 max-w-[140px]">
-                      <div className="max-w-[130px] overflow-hidden">
-                        <input type="text" defaultValue={c.module} onBlur={e => handleCellBlur(c.id, 'module', e.target.value)}
-                          className="w-full bg-transparent border-b border-transparent focus:border-blue-500 focus:outline-none text-xs" />
-                      </div>
-                    </td>
-                    <td className="px-3 py-2 text-xs text-gray-600 border-l border-gray-100 max-w-[200px]">
-                      <div className="max-w-[190px] overflow-hidden">
-                        <TextCellPopover value={c.expected_result || ''} onSave={val => handleCellBlur(c.id, 'expected_result', val)} placeholder="Resultado esperado..." />
-                      </div>
-                    </td>
+                    {[{ id: '_title', name: 'Task Name' }, { id: '_module', name: 'Módulo / Vía' }, { id: '_expected_result', name: 'Expected Result' }].map(hcol => {
+                      const isSorted = sortCol === hcol.id;
+                      return (
+                        <th key={hcol.id} className="group px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[200px] sticky top-0 z-20 bg-blue-50 select-none">
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => handleSortCol(hcol.id)} className="flex items-center gap-0.5 hover:text-blue-600 transition-colors flex-1 text-left">
+                              <span>{hcol.name}</span>
+                              {isSorted ? (sortDir === 'asc' ? <ChevronUp className="w-3 h-3 text-blue-500" /> : <ChevronDown className="w-3 h-3 text-blue-500" />) : <ChevronUp className="w-3 h-3 opacity-0 group-hover:opacity-30" />}
+                            </button>
+                            <ColumnFilterDropdown colId={hcol.id} colName={hcol.name} uniqueValues={columnUniqueValues[hcol.id] || []} selected={colFilters[hcol.id] || new Set()} onApply={(sel) => setColFilters(prev => ({ ...prev, [hcol.id]: sel }))} onClear={() => setColFilters(prev => { const n = { ...prev }; delete n[hcol.id]; return n; })} />
+                          </div>
+                        </th>
+                      );
+                    })}
                     {customCols.map((col: any) => (
-                      <td key={col.id || col.name} className="px-3 py-2 border-l border-gray-100 bg-indigo-50/20 min-w-[160px]">
-                        <div className="max-w-[200px] overflow-hidden">
-                          {col.type === 'dropdown' ? (
-                            <select value={customData[col.id] || ''} onChange={e => handleCustomDataChange(c.id, customData, col.id, e.target.value)}
-                              className="w-full text-xs bg-white border border-gray-200 rounded-md px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-400 text-gray-700">
-                              <option value="">— Seleccionar —</option>
-                              {col.options?.map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
-                            </select>
-                          ) : (
-                            <TextCellPopover value={customData[col.id] || ''} onSave={val => handleCustomDataChange(c.id, customData, col.id, val)} placeholder="..." />
+                      <th
+                        key={col.id || col.name}
+                        className="group px-3 py-3 text-xs font-bold text-indigo-900 uppercase min-w-[160px] bg-indigo-50 border-l border-indigo-100 sticky top-0 z-20 select-none"
+                      >
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => handleSortCol(col.id)} className="flex items-center gap-0.5 hover:text-indigo-600 transition-colors flex-1 text-left">
+                            <span>{col.name}</span>
+                            {sortCol === col.id ? (sortDir === 'asc' ? <ChevronUp className="w-3 h-3 text-indigo-500" /> : <ChevronDown className="w-3 h-3 text-indigo-500" />) : <ChevronUp className="w-3 h-3 opacity-0 group-hover:opacity-30" />}
+                          </button>
+                          <ColumnFilterDropdown colId={col.id} colName={col.name} uniqueValues={columnUniqueValues[col.id] || []} selected={colFilters[col.id] || new Set()} onApply={(sel) => setColFilters(prev => ({ ...prev, [col.id]: sel }))} onClear={() => setColFilters(prev => { const n = { ...prev }; delete n[col.id]; return n; })} />
+                          {canManage && (
+                            <button onClick={() => handleDeleteColumn(col.id || col.name)} className="opacity-0 group-hover:opacity-100 text-indigo-300 hover:text-red-500 transition-opacity p-0.5 rounded" title="Eliminar columna">✕</button>
                           )}
                         </div>
-                      </td>
+                      </th>
                     ))}
-                    <td className="px-3 py-2 text-xs text-gray-600 border-l border-gray-100 max-w-[200px]">
-                      <TextCellPopover value={execution.observation || ''} onSave={val => execution.id ? updateObservation(execution.id, val) : Promise.resolve()} placeholder="Sin notas..." />
-                    </td>
+                    <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[180px] border-l border-blue-100 sticky top-0 z-20 bg-blue-50">Observación</th>
                   </>
                 )}
 
-                    {/* Estado — sticky, colored select (merged Status + Action) */}
-                    <td className={`px-3 py-2 whitespace-nowrap sticky right-0 border-l border-gray-200 transition-colors ${
-                      currentStatus === 'PASS'        ? 'bg-green-50/80'  :
-                      currentStatus === 'FAIL'        ? 'bg-red-50/80'    :
-                      currentStatus === 'BLOCKED'     ? 'bg-yellow-50/80' :
-                      currentStatus === 'SKIP'        ? 'bg-slate-50/80'  :
-                      currentStatus === 'IMPROVEMENT' ? 'bg-purple-50/80' :
-                      'bg-gray-50/80'
-                    }`}>
-                      <div className="flex items-center gap-1.5">
-                        <select
-                          className={`text-xs font-semibold rounded-lg px-2 py-1.5 border cursor-pointer focus:outline-none focus:ring-2 transition-all flex-1 ${STATUS_SELECT_CLS[currentStatus] || STATUS_SELECT_CLS.PENDING}`}
-                          value={currentStatus}
-                          onChange={e => handleStatusChange(c, e.target.value)}
-                        >
-                          <option value="PENDING">⏳ PENDING</option>
-                          <option value="PASS">✅ PASS</option>
-                          <option value="FAIL">❌ FAIL</option>
-                          <option value="BLOCKED">⚠️ BLOCKED</option>
-                          <option value="SKIP">⏭️ SKIP</option>
-                          <option value="IMPROVEMENT">💡 IMPROVEMENT</option>
-                        </select>
-                        {canManage && (
-                          <button
-                            onClick={() => handleDeleteRow(c.id)}
-                            className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-all p-1 rounded"
-                            title="Eliminar caso"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
+                {/* Estado — always last, sticky right */}
+                <th className="group px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[140px] sticky top-0 right-0 z-30 bg-blue-50 border-l border-blue-200 shadow-l select-none">
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => handleSortCol('__status__')} className="flex items-center gap-0.5 hover:text-blue-600 transition-colors flex-1 text-left">
+                      <span>Estado</span>
+                      {sortCol === '__status__' ? (sortDir === 'asc' ? <ChevronUp className="w-3 h-3 text-blue-500" /> : <ChevronDown className="w-3 h-3 text-blue-500" />) : <ChevronUp className="w-3 h-3 opacity-0 group-hover:opacity-30" />}
+                    </button>
+                    <ColumnFilterDropdown
+                      colId="__status__"
+                      colName="Estado"
+                      uniqueValues={columnUniqueValues['__status__'] || []}
+                      selected={colFilters['__status__'] || new Set()}
+                      onApply={(sel) => setColFilters(prev => ({ ...prev, __status__: sel }))}
+                      onClear={() => setColFilters(prev => { const n = { ...prev }; delete n['__status__']; return n; })}
+                      formatLabel={(v) => `${STATUS_ICON[v] || ''} ${v}`}
+                    />
+                  </div>
+                </th>
+              </tr>
+            )}
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {isHierarchical ? (
+              filteredCases.length === 0 ? (
+                <tr>
+                  <td colSpan={30} className="px-6 py-8 text-center text-gray-400">
+                    {cases.length === 0
+                      ? 'No hay casos de prueba. Añade uno manualmente o importa un CSV.'
+                      : `No hay resultados para los filtros aplicados. (${total} casos en total)`
+                    }
+                  </td>
+                </tr>
+              ) : (
+                <HierarchicalMatrix
+                  cases={filteredCases}
+                  cycle={cycle}
+                  effectiveCols={effectiveCols}
+                  canManage={canManage}
+                  onStatusChange={handleStatusChange}
+                  onCellBlur={handleCellBlur}
+                  onCustomDataChange={handleCustomDataChange}
+                  onObservationSave={(execId, val) => updateObservation(execId, val)}
+                  onDeleteRow={handleDeleteRow}
+                />
+              )
+            ) : (
+              <>
+                {filteredCases.length === 0 ? (
+                  <tr>
+                    <td colSpan={3 + effectiveCols.length} className="px-6 py-8 text-center text-gray-400">
+                      {cases.length === 0
+                        ? 'No hay casos de prueba. Añade uno manualmente o importa un CSV.'
+                        : `No hay resultados para los filtros aplicados. (${total} casos en total)`
+                      }
                     </td>
                   </tr>
-                );
-              })
+                ) : (
+                  filteredCases.map((c, index) => {
+                    const execution = c.executions?.[0] || { status: 'PENDING', observation: '' };
+                    const customData = c.custom_data || {};
+                    const currentStatus: string = execution.status || 'PENDING';
+
+                    return (
+                      <tr key={c.id} className="hover:bg-gray-50/60 transition-colors group">
+                        {/* # */}
+                        <td className="px-3 py-2 text-xs font-bold text-blue-500 whitespace-nowrap">
+                          {index + 1}
+                        </td>
+
+                    {isDataDriven ? (
+                      /* DATA-DRIVEN CELLS: render in effectiveCols order, reserved IDs map to DB fields */
+                      effectiveCols.map((col: any) => {
+                        if (col.id === '_title') return (
+                          <td key="_title" className="px-3 py-2 text-xs text-gray-700 max-w-[220px]">
+                            <div className="max-w-[210px] overflow-hidden">
+                              <TextCellPopover value={c.title || ''} onSave={val => handleCellBlur(c.id, 'title', val)} placeholder="Nombre del caso..." />
+                            </div>
+                          </td>
+                        );
+                        if (col.id === '_module') return (
+                          <td key="_module" className="px-3 py-2 text-xs text-gray-600 max-w-[140px]">
+                            <div className="max-w-[130px] overflow-hidden">
+                              <input type="text" defaultValue={c.module} onBlur={e => handleCellBlur(c.id, 'module', e.target.value)}
+                                className="w-full bg-transparent border-b border-transparent focus:border-blue-500 focus:outline-none text-xs" />
+                            </div>
+                          </td>
+                        );
+                        if (col.id === '_expected_result') return (
+                          <td key="_expected_result" className="px-3 py-2 text-xs text-gray-600 border-l border-gray-100 max-w-[200px]">
+                            <div className="max-w-[190px] overflow-hidden">
+                              <TextCellPopover value={c.expected_result || ''} onSave={val => handleCellBlur(c.id, 'expected_result', val)} placeholder="Resultado esperado..." />
+                            </div>
+                          </td>
+                        );
+                        if (col.id === '_observation') return (
+                          <td key="_observation" className="px-3 py-2 text-xs text-gray-600 border-l border-gray-100 max-w-[200px]">
+                            <TextCellPopover value={execution.observation || ''} onSave={val => execution.id ? updateObservation(execution.id, val) : Promise.resolve()} placeholder="Sin notas..." />
+                          </td>
+                        );
+                        // Custom (non-reserved) column
+                        return (
+                          <td key={col.id} className="px-3 py-2 border-l border-gray-100 bg-indigo-50/20 min-w-[160px]">
+                            <div className="max-w-[200px] overflow-hidden">
+                              {col.type === 'dropdown' ? (
+                                <select
+                                  value={customData[col.id] || ''}
+                                  onChange={e => handleCustomDataChange(c.id, customData, col.id, e.target.value)}
+                                  className="w-full text-xs bg-white border border-gray-200 rounded-md px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-400 text-gray-700"
+                                >
+                                  <option value="">— Seleccionar —</option>
+                                  {col.options?.map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
+                                </select>
+                              ) : (
+                                <TextCellPopover value={customData[col.id] || ''} onSave={val => handleCustomDataChange(c.id, customData, col.id, val)} placeholder="..." />
+                              )}
+                            </div>
+                          </td>
+                        );
+                      })
+                    ) : (
+                      /* LEGACY CELLS */
+                      <>
+                        <td className="px-3 py-2 text-xs text-gray-700 max-w-[220px]">
+                          <div className="max-w-[210px] overflow-hidden">
+                            <TextCellPopover value={c.title || ''} onSave={val => handleCellBlur(c.id, 'title', val)} placeholder="Nombre del caso..." />
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 text-xs text-gray-600 max-w-[140px]">
+                          <div className="max-w-[130px] overflow-hidden">
+                            <input type="text" defaultValue={c.module} onBlur={e => handleCellBlur(c.id, 'module', e.target.value)}
+                              className="w-full bg-transparent border-b border-transparent focus:border-blue-500 focus:outline-none text-xs" />
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 text-xs text-gray-600 border-l border-gray-100 max-w-[200px]">
+                          <div className="max-w-[190px] overflow-hidden">
+                            <TextCellPopover value={c.expected_result || ''} onSave={val => handleCellBlur(c.id, 'expected_result', val)} placeholder="Resultado esperado..." />
+                          </div>
+                        </td>
+                        {customCols.map((col: any) => (
+                          <td key={col.id || col.name} className="px-3 py-2 border-l border-gray-100 bg-indigo-50/20 min-w-[160px]">
+                            <div className="max-w-[200px] overflow-hidden">
+                              {col.type === 'dropdown' ? (
+                                <select value={customData[col.id] || ''} onChange={e => handleCustomDataChange(c.id, customData, col.id, e.target.value)}
+                                  className="w-full text-xs bg-white border border-gray-200 rounded-md px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-400 text-gray-700">
+                                  <option value="">— Seleccionar —</option>
+                                  {col.options?.map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
+                                </select>
+                              ) : (
+                                <TextCellPopover value={customData[col.id] || ''} onSave={val => handleCustomDataChange(c.id, customData, col.id, val)} placeholder="..." />
+                              )}
+                            </div>
+                          </td>
+                        ))}
+                        <td className="px-3 py-2 text-xs text-gray-600 border-l border-gray-100 max-w-[200px]">
+                          <TextCellPopover value={execution.observation || ''} onSave={val => execution.id ? updateObservation(execution.id, val) : Promise.resolve()} placeholder="Sin notas..." />
+                        </td>
+                      </>
+                    )}
+
+                        {/* Estado — sticky, colored select (merged Status + Action) */}
+                        <td className={`px-3 py-2 whitespace-nowrap sticky right-0 border-l border-gray-200 transition-colors ${
+                          currentStatus === 'PASS'        ? 'bg-green-50/80'  :
+                          currentStatus === 'FAIL'        ? 'bg-red-50/80'    :
+                          currentStatus === 'BLOCKED'     ? 'bg-yellow-50/80' :
+                          currentStatus === 'SKIP'        ? 'bg-slate-50/80'  :
+                          currentStatus === 'IMPROVEMENT' ? 'bg-purple-50/80' :
+                          'bg-gray-50/80'
+                        }`}>
+                          <div className="flex items-center gap-1.5">
+                            <select
+                              className={`text-xs font-semibold rounded-lg px-2 py-1.5 border cursor-pointer focus:outline-none focus:ring-2 transition-all flex-1 ${STATUS_SELECT_CLS[currentStatus] || STATUS_SELECT_CLS.PENDING}`}
+                              value={currentStatus}
+                              onChange={e => handleStatusChange(c, e.target.value)}
+                            >
+                              <option value="PENDING">⏳ PENDING</option>
+                              <option value="PASS">✅ PASS</option>
+                              <option value="FAIL">❌ FAIL</option>
+                              <option value="BLOCKED">⚠️ BLOCKED</option>
+                              <option value="SKIP">⏭️ SKIP</option>
+                              <option value="IMPROVEMENT">💡 IMPROVEMENT</option>
+                            </select>
+                            {canManage && (
+                              <button
+                                onClick={() => handleDeleteRow(c.id)}
+                                className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-all p-1 rounded"
+                                title="Eliminar caso"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </>
             )}
 
-            {/* Add Row */}
-            <tr>
-              <td colSpan={6 + customCols.length} className="px-4 py-3 bg-gray-50/50">
-                <button
-                  onClick={handleAddRow}
-                  className="w-full flex items-center justify-center py-2 text-sm font-semibold text-gray-500 hover:text-blue-600 hover:bg-blue-50 border border-dashed border-gray-300 hover:border-blue-300 rounded-lg transition-all"
-                >
-                  <Plus className="w-4 h-4 mr-2" /> Añadir Caso Manual
-                </button>
-              </td>
-            </tr>
+            {/* Add Row (flat mode only) */}
+            {!isHierarchical && (
+              <tr>
+                <td colSpan={6 + customCols.length} className="px-4 py-3 bg-gray-50/50">
+                  <button
+                    onClick={handleAddRow}
+                    className="w-full flex items-center justify-center py-2 text-sm font-semibold text-gray-500 hover:text-blue-600 hover:bg-blue-50 border border-dashed border-gray-300 hover:border-blue-300 rounded-lg transition-all"
+                  >
+                    <Plus className="w-4 h-4 mr-2" /> Añadir Caso Manual
+                  </button>
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -752,3 +751,4 @@ export default function Matrix() {
     </div>
   );
 }
+
