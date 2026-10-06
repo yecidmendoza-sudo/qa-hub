@@ -137,32 +137,8 @@ export default function Matrix() {
     }
   };
 
-  // ── Derived state ────────────────────────────────────────────────────────────
-  if (loading) return <div className="p-8 text-gray-500">Cargando matriz...</div>;
-  if (!cycle)  return <div className="p-8 text-gray-500">Ciclo no encontrado.</div>;
-
-  // Data-driven mode: activated whenever there are ANY custom_columns defined.
-  const allCols: any[] = (cycle.custom_columns || []).filter(
-    (c: any) => c.id !== 'sort_order'
-  );
-  const isDataDriven = allCols.length > 0;
-  const hasTitleCol = allCols.some((c: any) => c.id === '_title');
-  const effectiveCols: any[] = isDataDriven && !hasTitleCol
-    ? [{ id: '_title', name: 'Task Name', type: 'text' }, ...allCols]
-    : allCols;
-  const customCols: any[] = allCols.filter((c: any) => !c.id?.startsWith('_'));
-
-  const total = cases.length;
-
-  const statusCounts = { PASS: 0, FAIL: 0, BLOCKED: 0, SKIP: 0, IMPROVEMENT: 0, PENDING: 0 } as Record<string, number>;
-  cases.forEach(c => {
-    const s = c.executions?.[0]?.status || 'PENDING';
-    statusCounts[s] = (statusCounts[s] || 0) + 1;
-  });
-  const completed = (statusCounts.PASS || 0) + (statusCounts.FAIL || 0) + (statusCounts.SKIP || 0) + (statusCounts.IMPROVEMENT || 0);
-  const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
-
-  // ── Helpers: get cell value for any col (reserved or custom) ──────────────────
+  // ── Helpers: get cell value for any col (reserved or custom) ─────────────────
+  // NOTE: These must live BEFORE any early returns to respect Rules of Hooks.
   const getCellValue = (c: any, colId: string): string => {
     if (colId === '_title')           return c.title || '';
     if (colId === '_module')          return c.module || '';
@@ -172,7 +148,17 @@ export default function Matrix() {
     return String(c.custom_data?.[colId] || '');
   };
 
-  // ── Unique values per column (for filter dropdowns) ───────────────────────────
+  // Derived col lists (safe when cycle is null — returns empty arrays)
+  const allCols: any[] = ((cycle?.custom_columns || []) as any[]).filter(
+    (c: any) => c.id !== 'sort_order'
+  );
+  const isDataDriven = allCols.length > 0;
+  const hasTitleCol = allCols.some((c: any) => c.id === '_title');
+  const effectiveCols: any[] = isDataDriven && !hasTitleCol
+    ? [{ id: '_title', name: 'Task Name', type: 'text' }, ...allCols]
+    : allCols;
+
+  // ── Unique values per column (for filter dropdowns) ────────────────────────
   const columnUniqueValues = useMemo(() => {
     const map: Record<string, string[]> = {};
     const colsToIndex = isDataDriven
@@ -187,25 +173,9 @@ export default function Matrix() {
       map[col.id] = Array.from(vals).sort();
     }
     return map;
-  }, [cases]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cases, isDataDriven]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Filters ───────────────────────────────────────────────────────────────────
-  const allReviewers = Array.from(new Set(
-    cases.flatMap(c =>
-      (c.custom_data?.qa_reviewer || '')
-        .split(';')
-        .map((r: string) => r.trim())
-        .filter(Boolean)
-    )
-  )).sort();
-
-  const hasAnyColFilter = Object.values(colFilters).some(s => s.size > 0);
-
-  // Get label of active col filters for chips
-  const allColsForFilter = isDataDriven
-    ? [...effectiveCols, { id: '__status__', name: 'Estado' }]
-    : [{ id: '__status__', name: 'Estado' }];
-
+  // ── Filtered + sorted cases ────────────────────────────────────────────────
   const filteredCases = useMemo(() => {
     let result = cases.filter(c => {
       const status = c.executions?.[0]?.status || 'PENDING';
@@ -224,7 +194,6 @@ export default function Matrix() {
         );
         if (!inTitle && !inModule && !inCustom) return false;
       }
-      // Column-level filters
       for (const [colId, selectedVals] of Object.entries(colFilters)) {
         if (selectedVals.size === 0) continue;
         const val = getCellValue(c, colId);
@@ -232,7 +201,6 @@ export default function Matrix() {
       }
       return true;
     });
-    // Sort
     if (sortCol) {
       result = [...result].sort((a, b) => {
         const aVal = getCellValue(a, sortCol);
@@ -244,6 +212,34 @@ export default function Matrix() {
     return result;
   }, [cases, filterText, filterStatus, filterReviewer, colFilters, sortCol, sortDir]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Early returns (after ALL hooks) ───────────────────────────────────────
+  if (loading) return <div className="p-8 text-gray-500">Cargando matriz...</div>;
+  if (!cycle)  return <div className="p-8 text-gray-500">Ciclo no encontrado.</div>;
+  // customCols only needed for legacy render mode (no hooks involved)
+  const customCols: any[] = allCols.filter((c: any) => !c.id?.startsWith('_'));
+
+  const total = cases.length;
+  const statusCounts = { PASS: 0, FAIL: 0, BLOCKED: 0, SKIP: 0, IMPROVEMENT: 0, PENDING: 0 } as Record<string, number>;
+  cases.forEach(c => {
+    const s = c.executions?.[0]?.status || 'PENDING';
+    statusCounts[s] = (statusCounts[s] || 0) + 1;
+  });
+  const completed = (statusCounts.PASS || 0) + (statusCounts.FAIL || 0) + (statusCounts.SKIP || 0) + (statusCounts.IMPROVEMENT || 0);
+  const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+  const allReviewers = Array.from(new Set(
+    cases.flatMap(c =>
+      (c.custom_data?.qa_reviewer || '')
+        .split(';')
+        .map((r: string) => r.trim())
+        .filter(Boolean)
+    )
+  )).sort();
+
+  const hasAnyColFilter = Object.values(colFilters).some(s => s.size > 0);
+  const allColsForFilter = isDataDriven
+    ? [...effectiveCols, { id: '__status__', name: 'Estado' }]
+    : [{ id: '__status__', name: 'Estado' }];
   const filteredTotal = filteredCases.length;
 
   const handleSortCol = (colId: string) => {
