@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Settings2 } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Settings2, ChevronUp, ChevronDown, X } from 'lucide-react';
 import ViewPublicButton from '../components/shared/ViewPublicButton';
+import ColumnFilterDropdown from '../components/matrix/ColumnFilterDropdown';
 import { useAuth } from '../lib/supabase/auth';
 import {
   fetchMatrix,
@@ -45,6 +46,11 @@ export default function Matrix() {
   const [filterText, setFilterText] = useState('');
   const [filterStatus, setFilterStatus] = useState('ALL');
   const [filterReviewer, setFilterReviewer] = useState('ALL');
+  // Column filters: colId → Set of selected values (empty = no filter)
+  const [colFilters, setColFilters] = useState<Record<string, Set<string>>>({});
+  // Sort
+  const [sortCol, setSortCol] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
   const canManage = ['ADMIN', 'QA_LEAD'].includes(profile?.role ?? '');
 
@@ -136,20 +142,14 @@ export default function Matrix() {
   if (!cycle)  return <div className="p-8 text-gray-500">Ciclo no encontrado.</div>;
 
   // Data-driven mode: activated whenever there are ANY custom_columns defined.
-  // Reserved IDs (_title, _module, _expected_result, _observation) map to DB fields directly.
-  // Legacy mode only applies to very old cycles with ZERO custom_columns.
-
   const allCols: any[] = (cycle.custom_columns || []).filter(
     (c: any) => c.id !== 'sort_order'
   );
-  // Data-driven: any cycle that has custom_columns → use this mode
   const isDataDriven = allCols.length > 0;
-  // If _title is not in the list (old release-publisher cycles), prepend it automatically
   const hasTitleCol = allCols.some((c: any) => c.id === '_title');
   const effectiveCols: any[] = isDataDriven && !hasTitleCol
     ? [{ id: '_title', name: 'Task Name', type: 'text' }, ...allCols]
     : allCols;
-  // For legacy mode only: non-reserved custom cols
   const customCols: any[] = allCols.filter((c: any) => !c.id?.startsWith('_'));
 
   const total = cases.length;
@@ -159,12 +159,37 @@ export default function Matrix() {
     const s = c.executions?.[0]?.status || 'PENDING';
     statusCounts[s] = (statusCounts[s] || 0) + 1;
   });
-  // Progress: PASS + FAIL mark a case as evaluated (closed). SKIP/IMPROVEMENT are also closed.
   const completed = (statusCounts.PASS || 0) + (statusCounts.FAIL || 0) + (statusCounts.SKIP || 0) + (statusCounts.IMPROVEMENT || 0);
   const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
 
+  // ── Helpers: get cell value for any col (reserved or custom) ──────────────────
+  const getCellValue = (c: any, colId: string): string => {
+    if (colId === '_title')           return c.title || '';
+    if (colId === '_module')          return c.module || '';
+    if (colId === '_expected_result') return c.expected_result || '';
+    if (colId === '_observation')     return c.executions?.[0]?.observation || '';
+    if (colId === '__status__')       return c.executions?.[0]?.status || 'PENDING';
+    return String(c.custom_data?.[colId] || '');
+  };
+
+  // ── Unique values per column (for filter dropdowns) ───────────────────────────
+  const columnUniqueValues = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    const colsToIndex = isDataDriven
+      ? [...effectiveCols, { id: '__status__', name: 'Estado' }]
+      : [{ id: '__status__', name: 'Estado' }];
+    for (const col of colsToIndex) {
+      const vals = new Set<string>();
+      for (const row of cases) {
+        const v = getCellValue(row, col.id);
+        if (v) vals.add(v);
+      }
+      map[col.id] = Array.from(vals).sort();
+    }
+    return map;
+  }, [cases]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Filters ───────────────────────────────────────────────────────────────────
-  // Split semicolon-separated reviewer strings (e.g. "Fabricio Mariscal; Lisette Nina")
   const allReviewers = Array.from(new Set(
     cases.flatMap(c =>
       (c.custom_data?.qa_reviewer || '')
@@ -174,27 +199,69 @@ export default function Matrix() {
     )
   )).sort();
 
-  const filteredCases = cases.filter(c => {
-    const status = c.executions?.[0]?.status || 'PENDING';
-    if (filterStatus !== 'ALL' && status !== filterStatus) return false;
-    if (filterReviewer !== 'ALL') {
-      // match if reviewer appears anywhere in a possibly semicolon-separated value
-      const reviewers = (c.custom_data?.qa_reviewer || '')
-        .split(';').map((r: string) => r.trim());
-      if (!reviewers.includes(filterReviewer)) return false;
+  const hasAnyColFilter = Object.values(colFilters).some(s => s.size > 0);
+
+  // Get label of active col filters for chips
+  const allColsForFilter = isDataDriven
+    ? [...effectiveCols, { id: '__status__', name: 'Estado' }]
+    : [{ id: '__status__', name: 'Estado' }];
+
+  const filteredCases = useMemo(() => {
+    let result = cases.filter(c => {
+      const status = c.executions?.[0]?.status || 'PENDING';
+      if (filterStatus !== 'ALL' && status !== filterStatus) return false;
+      if (filterReviewer !== 'ALL') {
+        const reviewers = (c.custom_data?.qa_reviewer || '')
+          .split(';').map((r: string) => r.trim());
+        if (!reviewers.includes(filterReviewer)) return false;
+      }
+      if (filterText) {
+        const q = filterText.toLowerCase();
+        const inTitle = (c.title || '').toLowerCase().includes(q);
+        const inModule = (c.module || '').toLowerCase().includes(q);
+        const inCustom = Object.values(c.custom_data || {}).some(
+          v => String(v || '').toLowerCase().includes(q)
+        );
+        if (!inTitle && !inModule && !inCustom) return false;
+      }
+      // Column-level filters
+      for (const [colId, selectedVals] of Object.entries(colFilters)) {
+        if (selectedVals.size === 0) continue;
+        const val = getCellValue(c, colId);
+        if (!selectedVals.has(val)) return false;
+      }
+      return true;
+    });
+    // Sort
+    if (sortCol) {
+      result = [...result].sort((a, b) => {
+        const aVal = getCellValue(a, sortCol);
+        const bVal = getCellValue(b, sortCol);
+        const cmp = aVal.localeCompare(bVal, undefined, { sensitivity: 'base' });
+        return sortDir === 'asc' ? cmp : -cmp;
+      });
     }
-    if (filterText) {
-      const q = filterText.toLowerCase();
-      const inTitle = (c.title || '').toLowerCase().includes(q);
-      const inModule = (c.module || '').toLowerCase().includes(q);
-      const inCustom = Object.values(c.custom_data || {}).some(
-        v => String(v || '').toLowerCase().includes(q)
-      );
-      if (!inTitle && !inModule && !inCustom) return false;
-    }
-    return true;
-  });
+    return result;
+  }, [cases, filterText, filterStatus, filterReviewer, colFilters, sortCol, sortDir]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const filteredTotal = filteredCases.length;
+
+  const handleSortCol = (colId: string) => {
+    if (sortCol === colId) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortCol(colId);
+      setSortDir('asc');
+    }
+  };
+
+  const clearAllFilters = () => {
+    setFilterText('');
+    setFilterStatus('ALL');
+    setFilterReviewer('ALL');
+    setColFilters({});
+    setSortCol(null);
+  };
 
 
   // ── Render ───────────────────────────────────────────────────────────────────
@@ -298,13 +365,13 @@ export default function Matrix() {
           </select>
         )}
 
-        {/* Clear filters */}
-        {(filterText || filterStatus !== 'ALL' || filterReviewer !== 'ALL') && (
+        {/* Clear ALL filters */}
+        {(filterText || filterStatus !== 'ALL' || filterReviewer !== 'ALL' || hasAnyColFilter || sortCol) && (
           <button
-            onClick={() => { setFilterText(''); setFilterStatus('ALL'); setFilterReviewer('ALL'); }}
-            className="text-xs text-gray-500 hover:text-red-500 underline transition-colors"
+            onClick={clearAllFilters}
+            className="flex items-center gap-1 text-xs text-gray-500 hover:text-red-500 transition-colors"
           >
-            Limpiar filtros
+            <X className="w-3 h-3" /> Limpiar todo
           </button>
         )}
 
@@ -313,6 +380,31 @@ export default function Matrix() {
           {filteredTotal} / {total} casos
         </span>
       </div>
+
+      {/* Active column-filter chips */}
+      {hasAnyColFilter && (
+        <div className="flex flex-wrap gap-1.5 px-1">
+          {allColsForFilter.map(col => {
+            const sel = colFilters[col.id];
+            if (!sel || sel.size === 0) return null;
+            return (
+              <span
+                key={col.id}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs font-medium border border-blue-200"
+              >
+                <span className="font-semibold">{col.name}:</span>
+                <span>{Array.from(sel).join(', ')}</span>
+                <button
+                  onClick={() => setColFilters(prev => { const n = { ...prev }; delete n[col.id]; return n; })}
+                  className="ml-0.5 text-blue-400 hover:text-red-500 transition-colors"
+                >
+                  <X className="w-2.5 h-2.5" />
+                </button>
+              </span>
+            );
+          })}
+        </div>
+      )}
 
       {/* Table */}
       <div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-x-auto pb-32">
@@ -324,53 +416,90 @@ export default function Matrix() {
 
               {isDataDriven ? (
                 /* DATA-DRIVEN: render columns exactly as defined in custom_columns */
-                effectiveCols.map((col: any) => (
-                  <th
-                    key={col.id}
-                    className={`group px-3 py-3 text-xs font-bold uppercase min-w-[160px] sticky top-0 z-20 ${
-                      col.id?.startsWith('_')
-                        ? 'text-blue-900 bg-blue-50'
-                        : 'text-indigo-900 bg-indigo-50 border-l border-indigo-100'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-1">
-                      <span>{col.name}</span>
-                      {col.id?.startsWith('_') ? (
-                        /* Reserved column — show lock icon, not deletable */
-                        <span
-                          title="Columna estructural — no se puede eliminar"
-                          className="opacity-0 group-hover:opacity-60 text-blue-400 text-[10px] cursor-help transition-opacity"
-                        >🔒</span>
-                      ) : canManage && (
-                        /* Custom column — deletable */
+                effectiveCols.map((col: any) => {
+                  const isSorted = sortCol === col.id;
+                  const isReserved = col.id?.startsWith('_');
+                  return (
+                    <th
+                      key={col.id}
+                      className={`group px-3 py-3 text-xs font-bold uppercase min-w-[160px] sticky top-0 z-20 select-none ${
+                        isReserved
+                          ? 'text-blue-900 bg-blue-50'
+                          : 'text-indigo-900 bg-indigo-50 border-l border-indigo-100'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1">
+                        {/* Sortable name */}
                         <button
-                          onClick={() => handleDeleteColumn(col.id)}
-                          className="opacity-0 group-hover:opacity-100 text-indigo-300 hover:text-red-500 transition-opacity p-0.5 rounded"
-                          title="Eliminar columna"
-                        >✕</button>
-                      )}
-                    </div>
-                  </th>
-                ))
+                          onClick={() => handleSortCol(col.id)}
+                          className="flex items-center gap-0.5 hover:text-blue-600 transition-colors min-w-0 flex-1 text-left"
+                          title={`Ordenar por ${col.name}`}
+                        >
+                          <span className="truncate">{col.name}</span>
+                          {isSorted
+                            ? sortDir === 'asc'
+                              ? <ChevronUp className="w-3 h-3 flex-shrink-0 text-blue-500" />
+                              : <ChevronDown className="w-3 h-3 flex-shrink-0 text-blue-500" />
+                            : <ChevronUp className="w-3 h-3 flex-shrink-0 opacity-0 group-hover:opacity-30" />
+                          }
+                        </button>
+                        {/* Column filter button */}
+                        <ColumnFilterDropdown
+                          colId={col.id}
+                          colName={col.name}
+                          uniqueValues={columnUniqueValues[col.id] || []}
+                          selected={colFilters[col.id] || new Set()}
+                          onApply={(sel) => setColFilters(prev => ({ ...prev, [col.id]: sel }))}
+                          onClear={() => setColFilters(prev => { const n = { ...prev }; delete n[col.id]; return n; })}
+                        />
+                        {/* Delete button (custom cols only) */}
+                        {!isReserved && canManage && (
+                          <button
+                            onClick={() => handleDeleteColumn(col.id)}
+                            className="opacity-0 group-hover:opacity-100 text-indigo-300 hover:text-red-500 transition-opacity p-0.5 rounded flex-shrink-0"
+                            title="Eliminar columna"
+                          >✕</button>
+                        )}
+                        {isReserved && (
+                          <span
+                            title="Columna estructural — no se puede eliminar"
+                            className="opacity-0 group-hover:opacity-60 text-blue-400 text-[10px] cursor-help transition-opacity flex-shrink-0"
+                          >🔒</span>
+                        )}
+                      </div>
+                    </th>
+                  );
+                })
               ) : (
                 /* LEGACY: hardcoded fixed cols + custom cols + observation */
                 <>
-                  <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[200px] sticky top-0 z-20 bg-blue-50">Task Name</th>
-                  <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[130px] sticky top-0 z-20 bg-blue-50">Módulo / Vía</th>
-                  <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[180px] border-l border-blue-100 sticky top-0 z-20 bg-blue-50">Expected Result</th>
+                  {[{ id: '_title', name: 'Task Name' }, { id: '_module', name: 'Módulo / Vía' }, { id: '_expected_result', name: 'Expected Result' }].map(hcol => {
+                    const isSorted = sortCol === hcol.id;
+                    return (
+                      <th key={hcol.id} className="group px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[200px] sticky top-0 z-20 bg-blue-50 select-none">
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => handleSortCol(hcol.id)} className="flex items-center gap-0.5 hover:text-blue-600 transition-colors flex-1 text-left">
+                            <span>{hcol.name}</span>
+                            {isSorted ? (sortDir === 'asc' ? <ChevronUp className="w-3 h-3 text-blue-500" /> : <ChevronDown className="w-3 h-3 text-blue-500" />) : <ChevronUp className="w-3 h-3 opacity-0 group-hover:opacity-30" />}
+                          </button>
+                          <ColumnFilterDropdown colId={hcol.id} colName={hcol.name} uniqueValues={columnUniqueValues[hcol.id] || []} selected={colFilters[hcol.id] || new Set()} onApply={(sel) => setColFilters(prev => ({ ...prev, [hcol.id]: sel }))} onClear={() => setColFilters(prev => { const n = { ...prev }; delete n[hcol.id]; return n; })} />
+                        </div>
+                      </th>
+                    );
+                  })}
                   {customCols.map((col: any) => (
                     <th
                       key={col.id || col.name}
-                      className="px-3 py-3 text-xs font-bold text-indigo-900 uppercase min-w-[160px] bg-indigo-50 border-l border-indigo-100 group sticky top-0 z-20"
+                      className="group px-3 py-3 text-xs font-bold text-indigo-900 uppercase min-w-[160px] bg-indigo-50 border-l border-indigo-100 sticky top-0 z-20 select-none"
                     >
-                      <div className="flex items-center justify-between">
-                        <span>{col.name}</span>
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => handleSortCol(col.id)} className="flex items-center gap-0.5 hover:text-indigo-600 transition-colors flex-1 text-left">
+                          <span>{col.name}</span>
+                          {sortCol === col.id ? (sortDir === 'asc' ? <ChevronUp className="w-3 h-3 text-indigo-500" /> : <ChevronDown className="w-3 h-3 text-indigo-500" />) : <ChevronUp className="w-3 h-3 opacity-0 group-hover:opacity-30" />}
+                        </button>
+                        <ColumnFilterDropdown colId={col.id} colName={col.name} uniqueValues={columnUniqueValues[col.id] || []} selected={colFilters[col.id] || new Set()} onApply={(sel) => setColFilters(prev => ({ ...prev, [col.id]: sel }))} onClear={() => setColFilters(prev => { const n = { ...prev }; delete n[col.id]; return n; })} />
                         {canManage && (
-                          <button
-                            onClick={() => handleDeleteColumn(col.id || col.name)}
-                            className="opacity-0 group-hover:opacity-100 text-indigo-300 hover:text-red-500 transition-opacity ml-1 p-0.5 rounded"
-                            title="Eliminar columna"
-                          >✕</button>
+                          <button onClick={() => handleDeleteColumn(col.id || col.name)} className="opacity-0 group-hover:opacity-100 text-indigo-300 hover:text-red-500 transition-opacity p-0.5 rounded" title="Eliminar columna">✕</button>
                         )}
                       </div>
                     </th>
@@ -380,8 +509,22 @@ export default function Matrix() {
               )}
 
               {/* Estado — always last, sticky right */}
-              <th className="px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[140px] sticky top-0 right-0 z-30 bg-blue-50 border-l border-blue-200 shadow-l">
-                Estado
+              <th className="group px-3 py-3 text-xs font-bold text-blue-900 uppercase min-w-[140px] sticky top-0 right-0 z-30 bg-blue-50 border-l border-blue-200 shadow-l select-none">
+                <div className="flex items-center gap-1">
+                  <button onClick={() => handleSortCol('__status__')} className="flex items-center gap-0.5 hover:text-blue-600 transition-colors flex-1 text-left">
+                    <span>Estado</span>
+                    {sortCol === '__status__' ? (sortDir === 'asc' ? <ChevronUp className="w-3 h-3 text-blue-500" /> : <ChevronDown className="w-3 h-3 text-blue-500" />) : <ChevronUp className="w-3 h-3 opacity-0 group-hover:opacity-30" />}
+                  </button>
+                  <ColumnFilterDropdown
+                    colId="__status__"
+                    colName="Estado"
+                    uniqueValues={columnUniqueValues['__status__'] || []}
+                    selected={colFilters['__status__'] || new Set()}
+                    onApply={(sel) => setColFilters(prev => ({ ...prev, __status__: sel }))}
+                    onClear={() => setColFilters(prev => { const n = { ...prev }; delete n['__status__']; return n; })}
+                    formatLabel={(v) => `${STATUS_ICON[v] || ''} ${v}`}
+                  />
+                </div>
               </th>
             </tr>
           </thead>
