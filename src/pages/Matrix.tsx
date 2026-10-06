@@ -51,6 +51,9 @@ export default function Matrix() {
   // Sort
   const [sortCol, setSortCol] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  
+  // Hierarchical display state
+  const [collapsedPaths, setCollapsedPaths] = useState<Set<string>>(new Set());
 
   const canManage = ['ADMIN', 'QA_LEAD'].includes(profile?.role ?? '');
 
@@ -211,6 +214,29 @@ export default function Matrix() {
     }
     return result;
   }, [cases, filterText, filterStatus, filterReviewer, colFilters, sortCol, sortDir]); // eslint-disable-line react-hooks/exhaustive-deps
+  const visibleCases = useMemo(() => {
+    return filteredCases.filter(c => {
+      const path = c.custom_data?.hierarchy_path as string | undefined;
+      if (!path) return true;
+      
+      const parts = path.split(' > ');
+      // Check if any ancestor path is collapsed
+      for (let i = 1; i < parts.length; i++) {
+        const ancestorPath = parts.slice(0, i).join(' > ');
+        if (collapsedPaths.has(ancestorPath)) return false;
+      }
+      return true;
+    });
+  }, [filteredCases, collapsedPaths]);
+
+  const toggleCollapse = (path: string) => {
+    setCollapsedPaths(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(path)) newSet.delete(path);
+      else newSet.add(path);
+      return newSet;
+    });
+  };
 
   // ── Early returns (after ALL hooks) ───────────────────────────────────────
   if (loading) return <div className="p-8 text-gray-500">Cargando matriz...</div>;
@@ -241,6 +267,8 @@ export default function Matrix() {
     ? [...effectiveCols, { id: '__status__', name: 'Estado' }]
     : [{ id: '__status__', name: 'Estado' }];
   const filteredTotal = filteredCases.length;
+  
+  const isHierarchical = cycle?.custom_values?.display_mode === 'hierarchical';
 
   const handleSortCol = (colId: string) => {
     if (sortCol === colId) {
@@ -525,7 +553,7 @@ export default function Matrix() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {filteredCases.length === 0 ? (
+            {visibleCases.length === 0 ? (
               <tr>
                 <td colSpan={3 + effectiveCols.length} className="px-6 py-8 text-center text-gray-400">
                   {cases.length === 0
@@ -535,13 +563,21 @@ export default function Matrix() {
                 </td>
               </tr>
             ) : (
-              filteredCases.map((c, index) => {
+              visibleCases.map((c, index) => {
                 const execution = c.executions?.[0] || { status: 'PENDING', observation: '' };
                 const customData = c.custom_data || {};
                 const currentStatus: string = execution.status || 'PENDING';
+                
+                const depth = isHierarchical ? parseInt(customData.hierarchy_depth || '0', 10) : 0;
+                const path = customData.hierarchy_path || '';
+                const isCollapsed = collapsedPaths.has(path);
+                // Simple heuristic to check if it has children: if the next case in filteredCases starts with this path + ' > '
+                const cIndex = filteredCases.findIndex(row => row.id === c.id);
+                const hasChildren = isHierarchical && cIndex < filteredCases.length - 1 && 
+                  (filteredCases[cIndex + 1]?.custom_data?.hierarchy_path || '').startsWith(path + ' > ');
 
                 return (
-                  <tr key={c.id} className="hover:bg-gray-50/60 transition-colors group">
+                  <tr key={c.id} className={`hover:bg-gray-50/60 transition-colors group ${isHierarchical && depth === 0 ? 'bg-indigo-50/30 font-semibold' : ''}`}>
                     {/* # */}
                     <td className="px-3 py-2 text-xs font-bold text-blue-500 whitespace-nowrap">
                       {index + 1}
@@ -552,8 +588,16 @@ export default function Matrix() {
                   effectiveCols.map((col: any) => {
                     if (col.id === '_title') return (
                       <td key="_title" className="px-3 py-2 text-xs text-gray-700 max-w-[220px]">
-                        <div className="max-w-[210px] overflow-hidden">
-                          <TextCellPopover value={c.title || ''} onSave={val => handleCellBlur(c.id, 'title', val)} placeholder="Nombre del caso..." />
+                        <div className="flex items-center gap-1" style={{ paddingLeft: isHierarchical ? `${depth * 1.5}rem` : undefined }}>
+                          {isHierarchical && hasChildren && (
+                            <button onClick={() => toggleCollapse(path)} className="text-gray-400 hover:text-gray-700 w-4 h-4 flex items-center justify-center rounded bg-gray-100/50">
+                              {isCollapsed ? '▶' : '▼'}
+                            </button>
+                          )}
+                          {!hasChildren && isHierarchical && <div className="w-4 h-4" />}
+                          <div className="max-w-[210px] overflow-hidden flex-1">
+                            <TextCellPopover value={c.title || ''} onSave={val => handleCellBlur(c.id, 'title', val)} placeholder="Nombre del caso..." />
+                          </div>
                         </div>
                       </td>
                     );
@@ -601,8 +645,16 @@ export default function Matrix() {
                   /* LEGACY CELLS */
                   <>
                     <td className="px-3 py-2 text-xs text-gray-700 max-w-[220px]">
-                      <div className="max-w-[210px] overflow-hidden">
-                        <TextCellPopover value={c.title || ''} onSave={val => handleCellBlur(c.id, 'title', val)} placeholder="Nombre del caso..." />
+                      <div className="flex items-center gap-1" style={{ paddingLeft: isHierarchical ? `${depth * 1.5}rem` : undefined }}>
+                        {isHierarchical && hasChildren && (
+                          <button onClick={() => toggleCollapse(path)} className="text-gray-400 hover:text-gray-700 w-4 h-4 flex items-center justify-center rounded bg-gray-100/50">
+                            {isCollapsed ? '▶' : '▼'}
+                          </button>
+                        )}
+                        {!hasChildren && isHierarchical && <div className="w-4 h-4" />}
+                        <div className="max-w-[210px] overflow-hidden flex-1">
+                          <TextCellPopover value={c.title || ''} onSave={val => handleCellBlur(c.id, 'title', val)} placeholder="Nombre del caso..." />
+                        </div>
                       </div>
                     </td>
                     <td className="px-3 py-2 text-xs text-gray-600 max-w-[140px]">

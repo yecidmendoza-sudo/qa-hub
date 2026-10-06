@@ -40,6 +40,9 @@ interface CreateCyclePayload {
   created_by: string;
   // Optional: define extra columns to show in Matrix view
   extra_columns?: ExtraColumn[];
+  // Display settings
+  display_mode?: "flat" | "hierarchical";
+  hierarchy_columns?: string[];
 }
 
 // ── Handler ────────────────────────────────────────────────────────────────
@@ -74,7 +77,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return jsonError("Invalid JSON body", 400);
   }
 
-  const { project_name, version, cycle_type, test_cases, created_by, extra_columns } = payload;
+  const { project_name, version, cycle_type, test_cases, created_by, extra_columns, display_mode, hierarchy_columns } = payload;
 
   if (!project_name || !version || !cycle_type || !created_by) {
     return jsonError(
@@ -193,7 +196,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
         version: version,
         type: cycle_type,
         status: "IN_PROGRESS",
-        custom_values: {},
+        custom_values: {
+          display_mode: display_mode || 'flat',
+          hierarchy_depth: hierarchy_columns ? hierarchy_columns.length : 0,
+        },
         // Store extra column definitions so Matrix.tsx renders them automatically
         custom_columns: resolvedExtraColumns,
       })
