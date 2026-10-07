@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { ChevronRight, ChevronDown, Trash2 } from 'lucide-react';
+import { useMemo } from 'react';
+import { Trash2 } from 'lucide-react';
 import TextCellPopover from './TextCellPopover';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -29,12 +29,9 @@ const STATUS_SELECT_CLS: Record<string, string> = {
 const DATA_ONLY_COL_IDS = new Set([
   'assignees', 'dark_mode', 'light_mode', '_observation', 'ticket',
   'severity', 'notes', 'qa_reviewer', 'priority', 'preconditions',
-  '_title', '_expected_result',
+  'resolution', 'avance', '_title', '_expected_result',
 ]);
 
-// ─── Derive hierarchy col IDs from the cycle custom_columns and max path depth ─
-// Strategy: take the first N custom_columns that are NOT data-only as hierarchy cols
-// where N = max path depth in the case data.
 function getHierarchyColIds(effectiveCols: any[], maxDepth: number): Set<string> {
   const candidates = effectiveCols.filter(c => !DATA_ONLY_COL_IDS.has(c.id));
   const hierIds = new Set<string>();
@@ -44,11 +41,11 @@ function getHierarchyColIds(effectiveCols: any[], maxDepth: number): Set<string>
   return hierIds;
 }
 
-// ─── Row processed for rowSpan rendering ─────────────────────────────────────
+// ─── Row with rowSpan metadata ────────────────────────────────────────────────
 interface ProcessedRow {
   caseData: any;
   visibleIndex: number;
-  parts: string[];       // hierarchy_path.split(' > ')
+  parts: string[];
   firstAtLevel: boolean[];
   spanAtLevel: number[];
 }
@@ -84,17 +81,9 @@ function buildRows(cases: any[]): ProcessedRow[] {
 
     for (let r = 0; r < rows.length; r++) {
       const parts = rows[r].parts;
-      if (lvl >= parts.length) {
-        closeGroup(r);
-        groupKey = '\x00';
-        continue;
-      }
+      if (lvl >= parts.length) { closeGroup(r); groupKey = '\x00'; continue; }
       const key = parts.slice(0, lvl + 1).join('\x01');
-      if (key !== groupKey) {
-        closeGroup(r);
-        groupStart = r;
-        groupKey = key;
-      }
+      if (key !== groupKey) { closeGroup(r); groupStart = r; groupKey = key; }
     }
     closeGroup(rows.length);
   }
@@ -102,10 +91,19 @@ function buildRows(cases: any[]): ProcessedRow[] {
   return rows;
 }
 
-// ─── Color palette per depth level ───────────────────────────────────────────
-const LEVEL_BG    = ['#1e293b','#334155','#475569','#64748b','#94a3b8','#cbd5e1','#e2e8f0','#f1f5f9','#f8fafc'];
-const LEVEL_TEXT  = ['#f8fafc','#f1f5f9','#f8fafc','#f8fafc','#0f172a','#0f172a','#334155','#475569','#64748b'];
-const LEVEL_BORDER= ['#0f172a','#1e293b','#334155','#475569','#64748b','#94a3b8','#cbd5e1','#e2e8f0','#f1f5f9'];
+// ─── Color palette per depth ──────────────────────────────────────────────────
+// Darker for higher levels (root), lighter as we go deeper
+const LEVEL_STYLES = [
+  { bg: '#1e293b', color: '#f1f5f9', border: '#0f172a' }, // level 0 - darkest
+  { bg: '#334155', color: '#f1f5f9', border: '#1e293b' },
+  { bg: '#475569', color: '#f8fafc', border: '#334155' },
+  { bg: '#64748b', color: '#f8fafc', border: '#475569' },
+  { bg: '#94a3b8', color: '#0f172a', border: '#64748b' },
+  { bg: '#cbd5e1', color: '#0f172a', border: '#94a3b8' },
+  { bg: '#e2e8f0', color: '#334155', border: '#cbd5e1' },
+  { bg: '#f1f5f9', color: '#475569', border: '#e2e8f0' },
+  { bg: '#f8fafc', color: '#64748b', border: '#f1f5f9' },
+];
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function HierarchicalMatrix({
@@ -119,7 +117,6 @@ export default function HierarchicalMatrix({
   onDeleteRow,
 }: HierarchicalMatrixProps) {
 
-  // ── Compute max depth across ALL cases (not just visible) ────────────────────
   const maxDepth = useMemo(() =>
     cases.reduce((max, c) => {
       const path: string = c.custom_data?.hierarchy_path || '';
@@ -127,33 +124,12 @@ export default function HierarchicalMatrix({
     }, 1)
   , [cases]);
 
-  // ── Separate hierarchy cols from data cols ────────────────────────────────────
   const hierarchyColIds = useMemo(() => getHierarchyColIds(effectiveCols, maxDepth), [effectiveCols, maxDepth]);
   const dataCols = useMemo(() => effectiveCols.filter(c => !hierarchyColIds.has(c.id)), [effectiveCols, hierarchyColIds]);
-  const numLevels = maxDepth; // number of tree-column slots to render
+  const numLevels = maxDepth;
 
-  // ── Collapse state ────────────────────────────────────────────────────────────
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const toggle = (path: string) =>
-    setCollapsed(prev => {
-      const next = new Set(prev);
-      next.has(path) ? next.delete(path) : next.add(path);
-      return next;
-    });
-
-  // ── Filter cases: hide rows whose ancestor path is collapsed ─────────────────
-  const visibleCases = useMemo(() => cases.filter(c => {
-    const path: string = c.custom_data?.hierarchy_path || '';
-    if (!path) return true;
-    const parts = path.split(' > ');
-    for (let i = 1; i < parts.length; i++) {
-      if (collapsed.has(parts.slice(0, i).join(' > '))) return false;
-    }
-    return true;
-  }), [cases, collapsed]);
-
-  // ── Build rowSpan metadata ────────────────────────────────────────────────────
-  const rows = useMemo(() => buildRows(visibleCases), [visibleCases]);
+  // No collapse state — all rows always visible
+  const rows = useMemo(() => buildRows(cases), [cases]);
 
   if (!rows.length) {
     return (
@@ -173,30 +149,23 @@ export default function HierarchicalMatrix({
         const status: string = exec.status || 'PENDING';
         const cd = c.custom_data || {};
 
-        // Does this row have children in the FULL case list?
-        const fullIdx = cases.findIndex(x => x.id === c.id);
-        const nextPath: string = cases[fullIdx + 1]?.custom_data?.hierarchy_path || '';
-        const thisPath: string = cd.hierarchy_path || '';
-        const hasChildren = thisPath && nextPath.startsWith(thisPath + ' > ');
-        const isThisCollapsed = collapsed.has(thisPath);
-
         return (
           <tr
             key={c.id}
-            className="group border-b border-gray-100 hover:bg-blue-50/20 transition-colors"
+            className="group border-b border-gray-100 hover:bg-blue-50/10 transition-colors"
           >
-            {/* ── Row # ───────────────────────────────────────────────────── */}
-            <td className="px-3 py-2 text-xs font-bold text-blue-400 whitespace-nowrap border-r border-gray-200 align-middle w-[50px]">
+            {/* ── Row # ─────────────────────────────────────────────────────── */}
+            <td className="px-3 py-2 text-xs font-bold text-blue-400 whitespace-nowrap border-r border-gray-200 align-middle w-[50px] bg-white">
               {row.visibleIndex}
             </td>
 
-            {/* ── Hierarchy level cells (one slot per level, with rowSpan) ─── */}
+            {/* ── Hierarchy cells — pure rowSpan, NO click/collapse ─────────── */}
             {Array.from({ length: numLevels }, (_, lvl) => {
               const isFirst = lvl < row.firstAtLevel.length ? row.firstAtLevel[lvl] : false;
-              const span = lvl < row.spanAtLevel.length ? row.spanAtLevel[lvl] : 1;
-              const label = lvl < row.parts.length ? row.parts[lvl] : '';
+              const span    = lvl < row.spanAtLevel.length  ? row.spanAtLevel[lvl]  : 1;
+              const label   = lvl < row.parts.length        ? row.parts[lvl]        : '';
 
-              // Not the owner of this cell → skip (handled by rowSpan)
+              // Not the owner of this slot → skip (rowSpan covers it)
               if (lvl < row.parts.length && !isFirst) return null;
 
               // This level doesn't exist for this row
@@ -204,18 +173,14 @@ export default function HierarchicalMatrix({
                 return (
                   <td
                     key={`h${lvl}`}
-                    className="border-r border-gray-100 bg-gray-50/30"
-                    style={{ minWidth: 90 }}
+                    className="border-r border-gray-100"
+                    style={{ minWidth: 90, background: '#fafafa' }}
                   />
                 );
               }
 
-              const bg = LEVEL_BG[Math.min(lvl, LEVEL_BG.length - 1)];
-              const color = LEVEL_TEXT[Math.min(lvl, LEVEL_TEXT.length - 1)];
-              const border = LEVEL_BORDER[Math.min(lvl, LEVEL_BORDER.length - 1)];
+              const style = LEVEL_STYLES[Math.min(lvl, LEVEL_STYLES.length - 1)];
               const isGroup = span > 1;
-              const cellPath = row.parts.slice(0, lvl + 1).join(' > ');
-              const isCellCollapsed = collapsed.has(cellPath);
 
               return (
                 <td
@@ -223,44 +188,31 @@ export default function HierarchicalMatrix({
                   rowSpan={span}
                   style={{
                     minWidth: 110,
-                    maxWidth: 160,
+                    maxWidth: 170,
                     verticalAlign: isGroup ? 'top' : 'middle',
-                    borderRight: `2px solid ${border}`,
-                    padding: '6px 8px',
-                    background: isGroup ? bg : undefined,
+                    background: style.bg,
+                    borderRight: `2px solid ${style.border}`,
+                    padding: '6px 10px',
                   }}
-                  className={isGroup ? '' : 'bg-gray-50/40 border-r border-gray-200'}
                 >
                   {isGroup ? (
-                    <button
-                      onClick={() => toggle(cellPath)}
-                      className="flex items-start gap-1 w-full text-left sticky top-14 transition-opacity hover:opacity-80"
-                      title={`${isCellCollapsed ? 'Expandir' : 'Colapsar'} — ${label} (${span} casos)`}
-                    >
-                      <span className="inline-flex items-center gap-1 flex-wrap" style={{ color }}>
-                        {isCellCollapsed
-                          ? <ChevronRight className="w-3 h-3 flex-shrink-0 mt-0.5" />
-                          : <ChevronDown className="w-3 h-3 flex-shrink-0 mt-0.5" />
-                        }
-                        <span className="text-xs font-semibold leading-snug break-words">{label}</span>
-                        <span style={{ opacity: 0.55, fontSize: '0.6rem' }}>({span})</span>
+                    // Group header — static, no click
+                    <div className="sticky top-14">
+                      <span
+                        className="inline-flex items-center gap-1 text-xs font-semibold leading-snug break-words"
+                        style={{ color: style.color }}
+                      >
+                        {label}
+                        <span style={{ opacity: 0.5, fontSize: '0.6rem', flexShrink: 0 }}>
+                          ({span})
+                        </span>
                       </span>
-                    </button>
-                  ) : (
-                    // Leaf-level cell — this is the actual test case node
-                    <div className="flex items-center gap-1">
-                      {hasChildren ? (
-                        <button
-                          onClick={() => toggle(thisPath)}
-                          className="flex-shrink-0 text-gray-400 hover:text-gray-700"
-                        >
-                          {isThisCollapsed
-                            ? <ChevronRight className="w-3 h-3" />
-                            : <ChevronDown className="w-3 h-3" />}
-                        </button>
-                      ) : null}
-                      <span className="text-xs text-gray-600 break-words">{label}</span>
                     </div>
+                  ) : (
+                    // Leaf node
+                    <span className="text-xs font-medium break-words" style={{ color: style.color }}>
+                      {label}
+                    </span>
                   )}
                 </td>
               );
@@ -269,12 +221,12 @@ export default function HierarchicalMatrix({
             {/* ── Data columns ─────────────────────────────────────────────── */}
             {dataCols.map((col: any) => {
               if (col.id === '_title') return (
-                <td key="_title" className="px-3 py-2 text-xs text-gray-700 min-w-[150px] max-w-[220px] border-r border-gray-100 align-middle">
+                <td key="_title" className="px-3 py-2 text-xs text-gray-700 min-w-[150px] max-w-[220px] border-r border-gray-100 align-middle bg-white">
                   <TextCellPopover value={c.title || ''} onSave={val => onCellBlur(c.id, 'title', val)} placeholder="Nombre..." />
                 </td>
               );
               if (col.id === '_observation') return (
-                <td key="_obs" className="px-3 py-2 text-xs text-gray-500 min-w-[130px] border-r border-gray-100 align-middle">
+                <td key="_obs" className="px-3 py-2 text-xs text-gray-500 min-w-[130px] border-r border-gray-100 align-middle bg-white">
                   <TextCellPopover
                     value={exec.observation || cd['_observation'] || ''}
                     onSave={val => exec.id ? onObservationSave(exec.id, val) : Promise.resolve()}
@@ -283,12 +235,11 @@ export default function HierarchicalMatrix({
                 </td>
               );
               if (col.id === '_expected_result') return (
-                <td key="_er" className="px-3 py-2 text-xs text-gray-600 min-w-[130px] border-r border-gray-100 align-middle">
+                <td key="_er" className="px-3 py-2 text-xs text-gray-600 min-w-[130px] border-r border-gray-100 align-middle bg-white">
                   <TextCellPopover value={c.expected_result || ''} onSave={val => onCellBlur(c.id, 'expected_result', val)} placeholder="Resultado esperado..." />
                 </td>
               );
 
-              // Generic custom column
               const val = cd[col.id] ?? '';
               return (
                 <td key={col.id} className="px-2 py-2 border-r border-gray-100 bg-white min-w-[110px] max-w-[180px] align-middle">
@@ -308,7 +259,7 @@ export default function HierarchicalMatrix({
               );
             })}
 
-            {/* ── Estado (sticky right) ─────────────────────────────────────── */}
+            {/* ── Estado sticky right ───────────────────────────────────────── */}
             <td className={`px-3 py-2 whitespace-nowrap sticky right-0 z-10 border-l-2 border-gray-300 align-middle transition-colors ${
               status === 'PASS'        ? 'bg-green-50'   :
               status === 'FAIL'        ? 'bg-red-50'     :
@@ -348,28 +299,21 @@ export default function HierarchicalMatrix({
   );
 }
 
-// ─── Exported header builder ──────────────────────────────────────────────────
+// ─── Header builder (exported for Matrix.tsx thead) ───────────────────────────
 export function buildHierarchicalHeaders(
   cases: any[],
   effectiveCols: any[],
 ): { numLevels: number; levelLabels: string[]; dataCols: any[] } {
-
-  // Compute max path depth from actual case data
   const maxDepth = cases.reduce((max, c) => {
     const path: string = c.custom_data?.hierarchy_path || '';
     return Math.max(max, path ? path.split(' > ').length : 1);
   }, 1);
 
-  // Derive which cols are hierarchy vs data
   const hierarchyColIds = getHierarchyColIds(effectiveCols, maxDepth);
-
-  // Build level labels: use column name for defined levels, "Nivel N" for extras
   const hierCols = effectiveCols.filter(c => hierarchyColIds.has(c.id));
   const levelLabels: string[] = Array.from({ length: maxDepth }, (_, i) =>
     hierCols[i]?.name ?? `Nivel ${i + 1}`
   );
-
   const dataCols = effectiveCols.filter(c => !hierarchyColIds.has(c.id));
-
   return { numLevels: maxDepth, levelLabels, dataCols };
 }
