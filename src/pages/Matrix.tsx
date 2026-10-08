@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Plus, Settings2, ChevronUp, ChevronDown, X } from 'lucide-react';
+import { ArrowLeft, Plus, Settings2, X } from 'lucide-react';
+
 import ViewPublicButton from '../components/shared/ViewPublicButton';
-import ColumnFilterDropdown from '../components/matrix/ColumnFilterDropdown';
+
 import { useAuth } from '../lib/supabase/auth';
 import {
   fetchMatrix,
@@ -68,9 +69,9 @@ export default function Matrix() {
 
   // ── Derived data (safe before cycle loads) ─────────────────────────────────
   const allCols: any[] = ((cycle?.custom_columns || []) as any[]).filter(c => c.id !== 'sort_order');
-  const isDataDriven = allCols.length > 0;
   // Never auto-prepend _title — only show columns explicitly defined in custom_columns
   const effectiveCols: any[] = allCols;
+
 
   // Normalize options: DB stores [{label,value}] but select needs string[]
   const normalizeOptions = (opts: any): string[] => {
@@ -220,7 +221,8 @@ export default function Matrix() {
     } catch (err: any) { alert(`Error al agregar columna: ${err.message}`); }
   };
 
-  const handleDeleteColumn = async (colId: string) => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _handleDeleteColumn = async (colId: string) => {
     if (!window.confirm('¿Seguro que deseas eliminar esta columna?')) return;
     try {
       const updatedCols = await deleteCustomColumn(cycle, colId, profile.email);
@@ -316,7 +318,8 @@ export default function Matrix() {
     catch (err: any) { console.error('Error al guardar merges:', err.message); loadMatrix(); }
   };
 
-  const handleSortCol = (colId: string) => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _handleSortCol = (colId: string) => {
     if (sortCol === colId) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     else { setSortCol(colId); setSortDir('asc'); }
   };

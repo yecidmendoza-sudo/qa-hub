@@ -406,7 +406,7 @@ export default function CsvImporter({ cycle, casesCount, onImportDone }: Props) 
                             </td>
                             <td className="px-4 py-2">
                               <div className="flex items-center gap-1">
-                                {cc.type === 'dropdown' && <Sparkles className="w-3 h-3 text-violet-400 flex-shrink-0" title="Auto-detectado" />}
+                                {cc.type === 'dropdown' && <Sparkles className="w-3 h-3 text-violet-400 flex-shrink-0" aria-label="Auto-detectado" />}
                                 <select value={cc.type} onChange={e => updateCol(idx, { type: e.target.value as ColType })}
                                   className="text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white w-full">
                                   <option value="text">Texto</option>

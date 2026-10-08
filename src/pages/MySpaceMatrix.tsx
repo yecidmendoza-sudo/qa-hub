@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Settings2, Download, Upload, X } from 'lucide-react';
 import Papa from 'papaparse';
-import ColumnFilterDropdown from '../components/matrix/ColumnFilterDropdown';
 import MatrixGrid, { type GridColumnDef } from '../components/matrix/MatrixGrid';
+
 import {
   parseMarkdownToMatrixData,
   updatePersonalMatrixData,
@@ -20,11 +20,6 @@ import { supabase } from '../lib/supabase/client';
 
 const STATUS_OPTIONS = ['PENDING', 'PASS', 'FAIL', 'BLOCKED'] as const;
 
-const STATUS_BADGE: Record<string, string> = {
-  PASS:    'bg-green-100 text-green-700 border-green-200',
-  FAIL:    'bg-red-100 text-red-700 border-red-200',
-  BLOCKED: 'bg-orange-100 text-orange-700 border-orange-200',
-  PENDING: 'bg-gray-100 text-gray-600 border-gray-200',
 };
 
 function genId() {
@@ -145,7 +140,8 @@ export default function MySpaceMatrix() {
   }, [save]);
 
   // ── Cell update ───────────────────────────────────────────────────────────
-  const handleCellChange = (rowId: string, colId: string, value: string) => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _handleCellChange = (rowId: string, colId: string, value: string) => {
     updateSection(activeIdx, sec => ({
       ...sec,
       rows: sec.rows.map(r => r.id === rowId ? { ...r, cells: { ...r.cells, [colId]: value } } : r),
@@ -234,7 +230,8 @@ export default function MySpaceMatrix() {
     });
   };
 
-  const handleDeleteColumn = (colId: string) => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _handleDeleteColumn = (colId: string) => {
     const col = sections[activeIdx]?.columns.find(c => c.id === colId);
     const colName = col?.name || colId;
     if (!window.confirm(`¿Eliminar la columna "${colName}"? Se borrarán todos los datos de esa columna en todas las filas.`)) return;
@@ -350,7 +347,8 @@ export default function MySpaceMatrix() {
   };
 
   // ── Per-column helpers ─────────────────────────────────────────────────────
-  const handleSortCol = (colId: string) => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _handleSortCol = (colId: string) => {
     if (sortCol === colId) {
       setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     } else {
@@ -369,7 +367,8 @@ export default function MySpaceMatrix() {
   const hasAnyColFilter = Object.values(colFilters).some(s => s.size > 0);
 
   // ── Memos for current section (must be at component level, not inside IIFE) ─
-  const columnUniqueValues = useMemo(() => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _columnUniqueValues = useMemo(() => {
     if (sections.length === 0) return {} as Record<string, string[]>;
     const sec = sections[activeIdx];
     const map: Record<string, string[]> = {};

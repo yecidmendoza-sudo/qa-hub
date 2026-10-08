@@ -110,7 +110,7 @@ function buildLayout(
     map.set(`${r0}:${c0}`, { skip: false, rowspan: rs, colspan: cs });
 
     for (let r = r0; r < r0 + rs && r < cases.length; r++) {
-      for (let c = c0; c < c0 + cs && c < columns.length; c++) {
+      for (let c: number = c0; c < c0 + cs && c < columns.length; c++) {
         if (r === r0 && c === c0) continue;
         map.set(`${r}:${c}`, { skip: true, rowspan: 1, colspan: 1 });
       }
