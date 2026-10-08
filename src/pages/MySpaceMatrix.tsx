@@ -20,8 +20,6 @@ import { supabase } from '../lib/supabase/client';
 
 const STATUS_OPTIONS = ['PENDING', 'PASS', 'FAIL', 'BLOCKED'] as const;
 
-};
-
 function genId() {
   return `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 }
