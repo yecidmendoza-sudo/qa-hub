@@ -48,7 +48,8 @@ export default function Matrix() {
   const [filterReviewer, setFilterReviewer] = useState('ALL');
   const [colFilters, setColFilters] = useState<Record<string, Set<string>>>({});
   const [sortCol, setSortCol] = useState<string | null>(null);
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [sortDir] = useState<'asc' | 'desc'>('asc');
+
   const [statusOptions, setStatusOptions] = useState<string[]>([]);
 
   const canManage = ['ADMIN', 'QA_LEAD'].includes(profile?.role ?? '');

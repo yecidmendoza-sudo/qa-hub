@@ -41,7 +41,8 @@ export default function MySpaceMatrix() {
   const [colFilters, setColFilters] = useState<Record<string, Set<string>>>({});
   // Sort
   const [sortCol, setSortCol] = useState<string | null>(null);
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [sortDir] = useState<'asc' | 'desc'>('asc');
+
   const [statusOptions, setStatusOptions] = useState<string[]>([]);
   // Raw matrix_data reference (for merging status_options back without losing sections)
   const matrixDataRef = useRef<Record<string, any>>({});
@@ -128,14 +129,6 @@ export default function MySpaceMatrix() {
     }
   }, [versionId, ticketId]);
 
-  // Helper: update one section and optionally save
-  const updateSection = useCallback((idx: number, updater: (sec: MatrixSection) => MatrixSection, persist = false) => {
-    setSections(prev => {
-      const next = prev.map((s, i) => i === idx ? updater(s) : s);
-      if (persist) save(next);
-      return next;
-    });
-  }, [save]);
 
 
   const handleCellBlur = (rowId: string, colId: string, value: string) => {
