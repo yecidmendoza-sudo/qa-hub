@@ -22,19 +22,26 @@ export const fetchMatrix = async (cycleId: string) => {
           : [c.executions]
         : [],
     }))
-    // Sort by sort_order stored in custom_data (document row position — set by agent-create-cycle).
-    // Falls back to numeric parse of ticket_id for legacy cycles without sort_order.
+    // Sort by sort_order stored in custom_data (document row position — set on import).
+    // Falls back to created_at (DB insertion order) for legacy cycles without sort_order.
+    // NOTE: Supabase already returns rows in created_at order from the query above,
+    // so for legacy cases we preserve the original order from the data array.
     .sort((a: any, b: any) => {
       const soA = a.custom_data?.sort_order;
       const soB = b.custom_data?.sort_order;
+      // Both have sort_order → numeric compare
       if (soA !== undefined && soB !== undefined) {
         return parseInt(soA, 10) - parseInt(soB, 10);
       }
-      // Legacy fallback: parse number from ticket_id (TC-01 → 1)
-      const numA = parseInt((a.ticket_id ?? '').replace(/\D/g, '') || '0', 10);
-      const numB = parseInt((b.ticket_id ?? '').replace(/\D/g, '') || '0', 10);
-      return numA - numB;
+      // Neither has sort_order → preserve created_at order (index from query)
+      // a and b are already in created_at order, so returning 0 keeps stable sort
+      if (soA === undefined && soB === undefined) {
+        return 0;
+      }
+      // One has sort_order, the other doesn't → sort_order wins
+      return soA !== undefined ? -1 : 1;
     });
+
 
   return { cycle, cases: normalizedCases };
 };
@@ -190,4 +197,18 @@ export const downloadTemplate = (cycle: any) => {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+};
+
+// ─── Merge persistence ────────────────────────────────────────────────────────
+export const updateCycleMerges = async (cycle: any, merges: any[]) => {
+  const { error } = await supabase
+    .from('test_cycles')
+    .update({
+      custom_values: {
+        ...(cycle.custom_values || {}),
+        merges,
+      },
+    })
+    .eq('id', cycle.id);
+  if (error) throw error;
 };

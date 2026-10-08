@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Save } from 'lucide-react';
 
 interface TextCellPopoverProps {
@@ -22,6 +23,7 @@ export default function TextCellPopover({
   const popoverRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const openedAtRef = useRef<number>(0); // timestamp when popup was opened
 
   // Sync draft when value changes externally
   useEffect(() => { setDraft(value); }, [value]);
@@ -64,15 +66,30 @@ export default function TextCellPopover({
     return () => document.removeEventListener('mousedown', handler);
   }, [isOpen, value]);
 
-  // Close on scroll — but ONLY when the scroll happens outside the popover.
-  // Without this check, scrolling inside the textarea itself closed the popover.
+  // Close on scroll — but ONLY when:
+  // 1. The scroll happens outside the popover
+  // 2. The scroll is NOT from AG Grid's internal containers (which auto-scroll on cell click)
+  // 3. At least 150ms have passed since the popup opened (grace period for AG Grid auto-scroll)
   useEffect(() => {
     if (!isOpen) return;
+    openedAtRef.current = Date.now();
+    
     const handler = (e: Event) => {
-      if (popoverRef.current && popoverRef.current.contains(e.target as Node)) {
-        // Scroll happened inside the popover (e.g. inside the textarea) — ignore
-        return;
-      }
+      // Grace period: ignore scrolls in the first 150ms after opening
+      // (AG Grid scrolls to bring clicked cell into view)
+      if (Date.now() - openedAtRef.current < 150) return;
+      
+      const target = e.target as Element | null;
+      
+      // Ignore scrolls from AG Grid's internal scroll containers
+      if (target?.closest?.('.ag-body-viewport') ||
+          target?.closest?.('.ag-center-cols-viewport') ||
+          target?.closest?.('.ag-body-horizontal-scroll-viewport') ||
+          target?.closest?.('.ag-virtual-list-viewport')) return;
+      
+      // Ignore scrolls inside the popover itself (e.g. textarea scroll)
+      if (popoverRef.current && popoverRef.current.contains(target)) return;
+      
       setIsOpen(false);
     };
     window.addEventListener('scroll', handler, true);
@@ -123,8 +140,9 @@ export default function TextCellPopover({
         {preview || <span className="text-gray-400 italic">{placeholder}</span>}
       </button>
 
-      {/* Popover — rendered via fixed positioning to escape any overflow:hidden ancestor */}
-      {isOpen && (
+      {/* Popover — rendered via Portal in document.body to escape AG Grid's
+           transform: translateY() on rows, which breaks position:fixed */}
+      {isOpen && createPortal(
         <div
           ref={popoverRef}
           style={popoverStyle}
@@ -182,7 +200,7 @@ export default function TextCellPopover({
             </div>
           )}
         </div>
-      )}
+      , document.body)}
     </div>
   );
 }

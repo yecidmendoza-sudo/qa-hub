@@ -73,16 +73,15 @@ const CONFIG_SKILLS = [
 ];
 
 // release-publisher (opción 10 del Engine QA)
-const RELEASE_SKILL = { num: 10, name: 'release-publisher', badge: 'Release', color: 'blue' as const, desc: '[2] Crea ciclo nuevo desde CSV/xlsx: auto-deriva col_id de los headers, detecta dropdowns, respeta el orden exacto del CSV. [3] Reporta resultados en ciclo existente.' };
-
+const RELEASE_SKILL = { num: 10, name: 'release-publisher', badge: 'Release', color: 'blue' as const, desc: '[1] Publica/actualiza Matriz Personal en QA Hub con modo upsert — preserva el mismo UUID/link si ya existe. [2] Crea ciclo nuevo desde CSV/xlsx con auto-detección de columnas. [3] Reporta resultados en ciclo existente.' };
 
 
 // ── Endpoints reference ────────────────────────────────────────────────────
 const ENDPOINTS = [
   {
     num: 1, name: 'agent-save-matrix',
-    desc: 'Publica una matriz personal de ticket en Mi Espacio (PENDING).',
-    fields: 'qa_email, ticket_id, project_name, stage (PRE-DEV|POST-DEV), matrix_type (UI|API|MIXED), content_md',
+    desc: 'Publica o actualiza una matriz personal en Mi Espacio. Modo upsert preserva el UUID — el link no cambia.',
+    fields: 'qa_email, ticket_id, project_name, stage (PRE-DEV|POST-DEV), matrix_type (UI|API|MIXED), content_md, [mode: create|upsert], [version_id: uuid]',
   },
   {
     num: 2, name: 'agent-create-cycle',
@@ -92,7 +91,7 @@ const ENDPOINTS = [
   {
     num: 3, name: 'agent-report-results',
     desc: 'Actualiza statuses en un ciclo existente. Puede llamarse justo después de crear el ciclo o más tarde.',
-    fields: 'cycle_id, reported_by, results[]: { ticket_id, status (PASS|FAIL|BLOCKED|PENDING), observation? }',
+    fields: 'cycle_id, reported_by, results[]: { ticket_id, status (PASS|FAIL|BLOCKED|PENDING|SKIP|IMPROVEMENT), observation? }',
   },
   {
     num: 4, name: 'agent-update-matrix-status',
@@ -182,8 +181,16 @@ const FAQS = [
     a: 'Corre: git pull && bash update-gideon.sh desde ~/Projects/ai-toolkit — descarga la última versión de todos los skills.',
   },
   {
-    q: '¿Puedo tener varias matrices para el mismo ticket?',
-    a: 'Sí. Cada llamada a agent-save-matrix con stage PRE-DEV o POST-DEV crea una versión nueva. Todas accesibles en Mi Espacio.',
+    q: '¿Puedo actualizar una matriz existente sin cambiar su link?',
+    a: 'Sí. Usa mode: "upsert" en agent-save-matrix (o pasa version_id desde la URL de Mi Espacio). La función actualiza el contenido en-place — el UUID, la URL pública y el link de ClickUp quedan idénticos. Si no existe aún, crea una nueva automáticamente.',
+  },
+  {
+    q: '¿Cómo funciona el modo upsert desde Antigravity chat?',
+    a: 'Pega la URL de Mi Espacio al chat (ej: /#/my-space/EDGE-1378/e35c957d-...). Gideon extrae el version_id del último segmento y llama agent-save-matrix con mode=upsert + version_id. HTTP 200 = actualizado, HTTP 201 = creado nuevo.',
+  },
+  {
+    q: '¿Puedo tener varias versiones del mismo ticket?',
+    a: 'Sí. Usa mode: "create" para forzar versión nueva (v2, v3...). Por defecto release-publisher pregunta si actualizar la existente o crear nueva.',
   },
   {
     q: '¿Por qué el orden de las filas en QA Hub coincide con mi CSV?',
@@ -192,6 +199,18 @@ const FAQS = [
   {
     q: '¿Puedo tener columnas en cualquier orden?',
     a: 'Sí. El orden de extra_columns en el request define el orden en QA Hub. Gideon respeta el orden exacto del CSV. _title va donde está "Task Name" en el CSV, no necesariamente como primera columna.',
+  },
+  {
+    q: '¿Puedo personalizar las opciones de Estado (PASS/FAIL/...)?',
+    a: 'Sí. ADMIN y QA_LEAD pueden hacer clic en el ✏️ junto al header "Estado" en cualquier matriz para agregar, quitar o resetear las opciones de estado. Los cambios se guardan en custom_values (ciclos) o matrix_data (Mi Espacio) sin migración de DB.',
+  },
+  {
+    q: '¿Qué estados existen por defecto?',
+    a: 'PENDING, PASS, FAIL, BLOCKED, SKIP e IMPROVEMENT. El campo status en DB es TEXT libre — acepta cualquier valor custom que el QA LEAD configure.',
+  },
+  {
+    q: '¿Qué pasa al importar un CSV en Mi Espacio si ya hay filas?',
+    a: 'QA Hub pregunta: "¿Reemplazar todas las filas con las del CSV?" Aceptar = reemplaza (actualiza la matriz completa). Cancelar = agrega al final. Así puedes re-importar un CSV actualizado sin acumular duplicados.',
   },
 ];
 
@@ -658,11 +677,13 @@ report-bot        → retry QA Hub → retry ClickUp → reporte en chat`}</Code
               <div className="grid md:grid-cols-2 gap-4">
                 {[
                   { title: 'Ciclos de Release', desc: 'Vistas SMOKE / SANITY / REGRESSION por versión. Columnas renderizadas dinámicamente desde el CSV (data-driven). Orden de columnas = orden exacto del CSV. Estado sticky a la derecha. Header sticky en scroll.' },
-                  { title: 'Mi Espacio', desc: 'Matrices personales por ticket. URL pública /#/m/{uuid} sin login — compártela con el dev. Paridad completa de features con ciclos: filtros, guards, lock icons.' },
-                  { title: 'Filtros en Matriz', desc: 'Barra de filtros en ambas vistas: búsqueda de texto libre en todas las celdas, filtro por Estado (PASS/FAIL/BLOCKED/PENDING) y por QA Reviewer. Contador en tiempo real de filas visibles.' },
+                  { title: 'Mi Espacio', desc: 'Matrices personales por ticket. URL pública /#/m/{uuid} sin login — compártela con el dev. Actualización in-place con mode=upsert: el link nunca cambia al re-publicar desde Gideon.' },
+                  { title: 'Filtros en Matriz', desc: 'Barra de filtros en ambas vistas: búsqueda de texto libre en todas las celdas, filtro por Estado (PASS/FAIL/BLOCKED/PENDING/SKIP/IMPROVEMENT) y por QA Reviewer. Contador en tiempo real de filas visibles.' },
                   { title: 'Columnas Protegidas', desc: 'Columnas con IDs reservados (_title, _module, _observation) muestran 🔒 y no pueden eliminarse. Columnas custom muestran ✕ al hover. Todo borrado requiere confirmación (guard dialog).' },
+                  { title: 'Estado Personalizable', desc: 'ADMIN y QA_LEAD pueden hacer clic en ✏️ junto al header "Estado" para agregar, quitar o resetear las opciones. Defaults: PENDING · PASS · FAIL · BLOCKED · SKIP · IMPROVEMENT. Se guarda por matriz sin migración de DB.' },
+                  { title: 'Import CSV con upsert', desc: 'Al importar un CSV en Mi Espacio, si ya hay filas, QA Hub pregunta: "¿Reemplazar o Agregar al final?". Reemplazar actualiza la matriz completa in-place — sin acumular duplicados ni cambiar el URL.' },
                   { title: 'Sidebar Collapsible', desc: 'Click en «‹‹/››» para colapsar el sidebar a íconos (64px). Estado guardado en localStorage.' },
-                  { title: 'Roles', desc: 'ADMIN: acceso total. QA_LEAD: crea ciclos y gestiona columnas. QA_TESTER: edita celdas y cambia status — no puede crear/eliminar ciclos ni columnas.' },
+                  { title: 'Roles', desc: 'ADMIN: acceso total. QA_LEAD: crea ciclos, gestiona columnas y edita opciones de Estado. QA_TESTER: edita celdas y cambia status — no puede crear/eliminar ciclos ni columnas.' },
                 ].map(item => (
                   <Card key={item.title}>
                     <h3 className="font-semibold text-gray-800 mb-2">{item.title}</h3>
@@ -700,6 +721,41 @@ report-bot        → retry QA Hub → retry ClickUp → reporte en chat`}</Code
                     ))}
                   </tbody>
                 </table>
+              </Card>
+
+              {/* agent-save-matrix — upsert detail */}
+              <Card>
+                <h3 className="font-semibold text-gray-800 mb-3">agent-save-matrix — Modo Upsert</h3>
+                <p className="text-sm text-gray-600 mb-3 leading-relaxed">
+                  Actualiza una matriz existente <strong>sin cambiar su UUID</strong> — el link de ClickUp y la URL pública siguen funcionando.
+                  Útil cuando el QA re-genera la matriz con nuevos casos o cambios de resultados.
+                </p>
+                <Code>{`// UPDATE por version_id explícito (del link /#/my-space/TICKET/{version_id})
+POST /agent-save-matrix
+{
+  "qa_email":     "qa@empresa.com",
+  "ticket_id":    "EDGE-1378",
+  "project_name": "MiProyecto",
+  "stage":        "POST-DEV",
+  "matrix_type":  "UI",
+  "content_md":   "# Matriz\n| ID | Caso | Estado |\n...",
+  "mode":         "upsert",
+  "version_id":   "e35c957d-83a7-4ca9-b0b9-961a8bc52d70"
+}
+
+// Respuesta HTTP 200 — actualizado, mismo UUID preservado:
+{
+  "success": true,
+  "updated": true,
+  "version_id":   "e35c957d-83a7-4ca9-b0b9-961a8bc52d70",
+  "version_num":  1,
+  "matrix_url":   "https://qa-hub.../#/m/{public_uuid}",
+  "personal_url": "https://qa-hub.../#/my-space/EDGE-1378/e35c957d-..."
+}
+
+// CREATE nueva versión (comportamiento anterior — retrocompatible):
+{ "mode": "create" }   // o simplemente omitir mode
+// Respuesta HTTP 201 — version_num: 2, nuevo UUID`}</Code>
               </Card>
             </Section>
 

@@ -30,6 +30,10 @@ interface SaveMatrixPayload {
   content_md: string;
   fixtures_json?: unknown;
   notes?: string | null;
+  // Upsert control — default: 'create' (backward compat)
+  mode?: 'create' | 'upsert';
+  // Optional: update a specific version by its UUID (extracted from the URL)
+  version_id?: string;
 }
 
 // ── Multi-section Markdown Parser ──────────────────────────────────────────
@@ -169,6 +173,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
     content_md,
     fixtures_json = null,
     notes = null,
+    mode = 'create',
+    version_id,
   } = payload;
 
   // ── Field validation ────────────────────────────────────────────────────
@@ -270,6 +276,87 @@ Deno.serve(async (req: Request): Promise<Response> => {
       folderId = newFolder.id;
     }
 
+    // ── 3 (upsert path) — Update existing version if requested ──────────────
+    if (mode === 'upsert' || version_id) {
+      let targetId: string | null = null;
+      let targetPublicUuid: string | null = null;
+      let targetVersionNum: number | null = null;
+      let existingStatusOptions: unknown = null;
+
+      if (version_id) {
+        // Explicit version UUID from URL — update that specific one
+        const { data: vRow } = await supabase
+          .from('personal_matrix_versions')
+          .select('id, public_uuid, version_num, matrix_data')
+          .eq('id', version_id)
+          .maybeSingle();
+        if (vRow) {
+          targetId = vRow.id;
+          targetPublicUuid = vRow.public_uuid;
+          targetVersionNum = vRow.version_num;
+          existingStatusOptions = (vRow.matrix_data as Record<string, unknown> | null)
+            ?.status_options ?? null;
+        }
+      } else {
+        // Auto-find the latest version for this folder
+        const { data: vRow } = await supabase
+          .from('personal_matrix_versions')
+          .select('id, public_uuid, version_num, matrix_data')
+          .eq('folder_id', folderId)
+          .order('version_num', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (vRow) {
+          targetId = vRow.id;
+          targetPublicUuid = vRow.public_uuid;
+          targetVersionNum = vRow.version_num;
+          existingStatusOptions = (vRow.matrix_data as Record<string, unknown> | null)
+            ?.status_options ?? null;
+        }
+      }
+
+      if (targetId && targetPublicUuid) {
+        // Build new matrix_data preserving status_options if they exist
+        const parsedSections = parseMarkdownToSections(content_md);
+        const newMatrixData: Record<string, unknown> = { ...parsedSections };
+        if (existingStatusOptions !== null) {
+          newMatrixData.status_options = existingStatusOptions;
+        }
+
+        const { error: updateError } = await supabase
+          .from('personal_matrix_versions')
+          .update({
+            content_md,
+            matrix_data: newMatrixData,
+            stage,
+            matrix_type,
+            fixtures_json: fixtures_json ?? null,
+            notes: notes ?? null,
+          })
+          .eq('id', targetId);
+
+        if (updateError) {
+          throw new Error(`Version update failed: ${updateError.message}`);
+        }
+
+        return jsonResponse(
+          {
+            success: true,
+            updated: true,
+            folder_id: folderId,
+            version_id: targetId,
+            version_num: targetVersionNum,
+            stage,
+            public_uuid: targetPublicUuid,
+            matrix_url: `${QA_HUB_BASE_URL}/#/m/${targetPublicUuid}`,
+            personal_url: `${QA_HUB_BASE_URL}/#/my-space/${ticket_id}/${targetId}`,
+          },
+          200,
+        );
+      }
+      // No existing version found → fall through to INSERT
+    }
+
     // ── 3. Get next version_num ───────────────────────────────────────────
     const { count, error: countError } = await supabase
       .from("personal_matrix_versions")
@@ -310,12 +397,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return jsonResponse(
       {
         success: true,
+        updated: false,
         folder_id: folderId,
+        version_id: inserted.id,
         version_num: versionNum,
         stage,
         public_uuid: inserted.public_uuid,
         matrix_url: `${QA_HUB_BASE_URL}/#/m/${inserted.public_uuid}`,
-        personal_url: `${QA_HUB_BASE_URL}/#/my-space/${ticket_id}`,
+        personal_url: `${QA_HUB_BASE_URL}/#/my-space/${ticket_id}/${inserted.id}`,
       },
       201,
     );

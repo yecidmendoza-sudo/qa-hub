@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Settings2, Download, Upload, X, ChevronUp, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Plus, Settings2, Download, Upload, X } from 'lucide-react';
 import Papa from 'papaparse';
-import TextCellPopover from '../components/matrix/TextCellPopover';
 import ColumnFilterDropdown from '../components/matrix/ColumnFilterDropdown';
+import MatrixGrid, { type GridColumnDef } from '../components/matrix/MatrixGrid';
 import {
   parseMarkdownToMatrixData,
   updatePersonalMatrixData,
@@ -15,6 +15,8 @@ import {
   type MatrixRow,
 } from '../lib/services/personalMatrixService';
 import AddColumnModal from '../components/matrix/AddColumnModal';
+import { getMatrixDataStatusOptions } from '../lib/constants/statusOptions';
+import { supabase } from '../lib/supabase/client';
 
 const STATUS_OPTIONS = ['PENDING', 'PASS', 'FAIL', 'BLOCKED'] as const;
 
@@ -47,6 +49,9 @@ export default function MySpaceMatrix() {
   // Sort
   const [sortCol, setSortCol] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [statusOptions, setStatusOptions] = useState<string[]>([]);
+  // Raw matrix_data reference (for merging status_options back without losing sections)
+  const matrixDataRef = useRef<Record<string, any>>({});
 
   // ── Load ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -63,6 +68,8 @@ export default function MySpaceMatrix() {
 
         let secs: MatrixSection[];
         if (version.matrix_data) {
+          // Save raw matrix_data so we can merge status_options back later
+          matrixDataRef.current = version.matrix_data as Record<string, any>;
           // Use stored JSONB — normalize to sections (handles legacy {columns,rows} format too)
           secs = normalizeSections(version.matrix_data as { sections?: MatrixSection[]; columns?: MatrixCol[]; rows?: MatrixRow[] });
           // Re-normalize status cells: agent-save-matrix may store raw text ("✅ Aprobado")
@@ -100,8 +107,11 @@ export default function MySpaceMatrix() {
             rows: [],
           }];
         }
+        // Load status options from matrix_data.status_options (invisible in grid)
+        setStatusOptions(getMatrixDataStatusOptions(version.matrix_data as Record<string, any> | null));
         setSections(secs);
         setActiveIdx(0);
+
       } catch (e) {
         setError('No se pudo cargar la matriz.');
       } finally {
@@ -187,6 +197,22 @@ export default function MySpaceMatrix() {
       save(next);
       return next;
     });
+  };
+
+  const handleUpdateStatusOptions = async (opts: string[]) => {
+    setStatusOptions(opts);
+    try {
+      // Merge status_options into matrix_data without losing sections
+      const newData = { ...matrixDataRef.current, status_options: opts };
+      matrixDataRef.current = newData;
+      const { error } = await supabase
+        .from('personal_matrix_versions')
+        .update({ matrix_data: newData })
+        .eq('id', versionId);
+      if (error) throw error;
+    } catch (err: any) {
+      console.error('Error al guardar opciones de estado:', err.message);
+    }
   };
 
   // ── Column actions ────────────────────────────────────────────────────────
@@ -297,8 +323,22 @@ export default function MySpaceMatrix() {
           return { id: genId(), cells };
         });
 
+        // Ask user how to handle existing rows (only if section already has data)
+        let replaceExisting = false;
+        if (sec.rows.length > 0) {
+          replaceExisting = window.confirm(
+            `Esta sección ya tiene ${sec.rows.length} fila(s).\n\n` +
+            `¿Reemplazar todas las filas con las del CSV?\n\n` +
+            `✅ Aceptar = Reemplazar (actualiza la matriz completa)\n` +
+            `❌ Cancelar = Agregar al final`
+          );
+        }
+
         setSections(prev => {
-          const next = prev.map((s, i) => i !== activeIdx ? s : { ...s, rows: [...s.rows, ...newRows] });
+          const next = prev.map((s, i) => i !== activeIdx ? s : {
+            ...s,
+            rows: replaceExisting ? newRows : [...s.rows, ...newRows],
+          });
           save(next);
           return next;
         });
@@ -564,146 +604,65 @@ export default function MySpaceMatrix() {
               </div>
             )}
 
-            {/* ── Table ─────────────────────────────────────────────────── */}
-            <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-sm">
-              <table className="min-w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
-                  <tr>
-                    {activeSec.columns.map(col => {
-                      const isSorted = sortCol === col.id;
-                      return (
-                        <th
-                          key={col.id}
-                          className={`group px-4 py-3 text-left font-semibold text-gray-500 text-xs uppercase tracking-wider whitespace-nowrap select-none ${
-                            col.type === 'status' ? 'sticky right-10 bg-gray-50 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]' : ''
-                          }`}
-                        >
-                          <div className="flex items-center gap-1.5">
-                            {/* Sort button */}
-                            <button
-                              onClick={() => handleSortCol(col.id)}
-                              className="flex items-center gap-0.5 hover:text-blue-600 transition-colors flex-1 text-left min-w-0"
-                              title={`Ordenar por ${col.name}`}
-                            >
-                              <span className="truncate">{col.name}</span>
-                              {isSorted
-                                ? sortDir === 'asc'
-                                  ? <ChevronUp className="w-3 h-3 flex-shrink-0 text-blue-500" />
-                                  : <ChevronDown className="w-3 h-3 flex-shrink-0 text-blue-500" />
-                                : <ChevronUp className="w-3 h-3 flex-shrink-0 opacity-0 group-hover:opacity-30" />
-                              }
-                            </button>
-                            {/* Column filter */}
-                            <ColumnFilterDropdown
-                              colId={col.id}
-                              colName={col.name}
-                              uniqueValues={columnUniqueValues[col.id] || []}
-                              selected={colFilters[col.id] || new Set()}
-                              onApply={(sel) => setColFilters(prev => ({ ...prev, [col.id]: sel }))}
-                              onClear={() => setColFilters(prev => { const n = { ...prev }; delete n[col.id]; return n; })}
-                            />
-                            {/* Delete column */}
-                            {col.locked ? (
-                              <span title="Columna estructural — no se puede eliminar"
-                                className="opacity-0 group-hover:opacity-60 text-gray-400 text-[10px] cursor-help transition-opacity">🔒</span>
-                            ) : (
-                              <button
-                                onClick={() => handleDeleteColumn(col.id)}
-                                className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-opacity"
-                                title={`Eliminar columna ${col.name}`}
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </button>
-                            )}
-                          </div>
-                        </th>
-                      );
-                    })}
-                    <th className="sticky right-0 bg-gray-50 px-4 py-3 w-10 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]" />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {displayRows.length === 0 ? (
-                    <tr>
-                      <td colSpan={activeSec.columns.length + 1} className="px-4 py-10 text-center text-sm text-gray-400 italic">
-                        {activeSec.rows.length === 0
-                          ? 'Sin filas. Usa el botón de abajo para agregar.'
-                          : `Sin resultados para los filtros aplicados. (${activeSec.rows.length} filas en total)`
-                        }
-                      </td>
-                    </tr>
-                  ) : (
-                    displayRows.map(row => (
-                      <tr key={row.id} className="group hover:bg-gray-50 transition-colors">
-                        {activeSec.columns.map(col => (
-                          <td
-                            key={col.id}
-                            className={`px-3 py-2 ${
-                              col.type === 'status'
-                                ? 'sticky right-10 bg-white group-hover:bg-gray-50 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]'
-                                : ''
-                            }`}
-                          >
-                            {col.type === 'status' ? (
-                              <select
-                                value={row.cells[col.id] ?? 'PENDING'}
-                                onChange={e => handleStatusChange(row.id, col.id, e.target.value)}
-                                className={`text-xs font-semibold border rounded-full px-2 py-1 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-400 ${
-                                  STATUS_BADGE[row.cells[col.id] ?? 'PENDING'] ?? STATUS_BADGE.PENDING
-                                }`}
-                              >
-                                {STATUS_OPTIONS.map(s => (
-                                  <option key={s} value={s}>{s}</option>
-                                ))}
-                              </select>
-                            ) : col.type === 'dropdown' ? (
-                              <select
-                                value={row.cells[col.id] ?? ''}
-                                onChange={e => {
-                                  handleCellChange(row.id, col.id, e.target.value);
-                                  handleStatusChange(row.id, col.id, e.target.value);
-                                }}
-                                className="w-full text-sm bg-transparent border-b border-transparent focus:border-blue-500 focus:outline-none px-1 py-1"
-                              >
-                                <option value="">— Seleccionar —</option>
-                                {col.options?.map(opt => (
-                                  <option key={opt} value={opt}>{opt}</option>
-                                ))}
-                              </select>
-                            ) : (
-                              <TextCellPopover
-                                value={row.cells[col.id] ?? ''}
-                                onSave={(val: string) => handleCellBlur(row.id, col.id, val)}
-                              />
-                            )}
-                          </td>
-                        ))}
-                        <td className="sticky right-0 bg-white group-hover:bg-gray-50 px-2 py-2 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]">
-                          <button
-                            onClick={() => handleDeleteRow(row.id)}
-                            className="text-gray-300 hover:text-red-500 transition-colors p-1"
-                            title="Eliminar fila"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
+            {/* ── MatrixGrid ──────────────────────────────────────────────────── */}
+            {(() => {
+              // Adapt MatrixRow[] → cases[] format for MatrixGrid
+              const statusCol = activeSec.columns.find(c => c.type === 'status');
+              const gridCols: GridColumnDef[] = activeSec.columns
+                .filter(c => c.type !== 'status')
+                .map(c => ({ id: c.id, name: c.name, type: (c.type as GridColumnDef['type']) || 'text', options: c.options, width: 140 }));
+
+              const adaptedCases = displayRows.map(row => ({
+                id: row.id,
+                title: '',
+                custom_data: row.cells,
+                executions: [{ status: statusCol ? (row.cells[statusCol.id] ?? 'PENDING') : 'PENDING' }],
+              }));
+
+              return (
+                <div className="rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                  <MatrixGrid
+                    cases={adaptedCases}
+                    columns={gridCols}
+                    merges={[]}
+                    canManage
+                    onStatusChange={(tc, status) => {
+                      if (!statusCol) return;
+                      handleStatusChange(tc.id, statusCol.id, status);
+                    }}
+                    onCellSave={(caseId, colId, value) => handleCellBlur(caseId, colId, value)}
+                    onDeleteRow={handleDeleteRow}
+                    onMergesChange={() => {}}
+                    onBulkFill={(colId, value) => {
+                      const col = activeSec.columns.find(c => c.id === colId);
+                      if (!col) return;
+                      if (!window.confirm(`¿Rellenar columna "${col.name}" con "${value}" en todas las filas visibles?`)) return;
+                      setSections(prev => {
+                        const next = prev.map((s, i) => i !== activeIdx ? s : {
+                          ...s,
+                          rows: s.rows.map(r => ({ ...r, cells: { ...r.cells, [colId]: value } })),
+                        });
+                        save(next);
+                        return next;
+                      });
+                    }}
+                    statusOptions={statusOptions}
+                    onStatusOptionsChange={handleUpdateStatusOptions}
+                  />
+
                   {/* Add Row */}
-                  <tr>
-                    <td colSpan={activeSec.columns.length + 1} className="px-4 py-3 bg-gray-50/50">
-                      <button
-                        onClick={handleAddRow}
-                        className="w-full flex items-center justify-center py-2 text-sm font-semibold text-gray-500 hover:text-blue-600 hover:bg-blue-50 border border-dashed border-gray-300 hover:border-blue-300 rounded-lg transition-all"
-                      >
-                        <Plus className="w-4 h-4 mr-2" /> Añadir Fila
-                      </button>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+                  <div className="px-4 py-3 bg-gray-50/50 border-t border-gray-100">
+                    <button
+                      onClick={handleAddRow}
+                      className="w-full flex items-center justify-center py-2 text-sm font-semibold text-gray-500 hover:text-blue-600 hover:bg-blue-50 border border-dashed border-gray-300 hover:border-blue-300 rounded-lg transition-all"
+                    >
+                      <Plus className="w-4 h-4 mr-2" /> Añadir Fila
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+
           </>
         )}
 

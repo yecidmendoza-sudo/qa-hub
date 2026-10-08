@@ -1,0 +1,129 @@
+/* QA Hub Matrix — Custom HTML table styles */
+/* NOTE: Uses border-collapse: separate (required for position:sticky to work in Chrome) */
+
+.qhm-table {
+  font-family: 'Inter', -apple-system, sans-serif;
+  font-size: 12px;
+  border-collapse: separate;   /* ← required for sticky <td>/<th> in Chrome */
+  border-spacing: 0;           /* ← keeps cells touching like collapse */
+  width: 100%;
+  user-select: none;           /* ← prevent text-select during drag-to-select */
+  -webkit-user-select: none;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+.qhm-th {
+  background: #f8fafc;
+  border-top: 1px solid #d1d5db;
+  border-right: 1px solid #d1d5db;
+  border-bottom: 2px solid #c8d4e0;
+  border-left: none;
+  padding: 7px 10px;
+  text-align: left;
+  white-space: normal;       /* allow header text to wrap */
+  word-break: break-word;
+  position: relative;
+  user-select: none;
+  vertical-align: top;
+}
+.qhm-th:first-child { border-left: 1px solid #d1d5db; }
+
+/* ── Body cells ─────────────────────────────────────────────────────────── */
+.qhm-td {
+  border-top: none;                 /* ← prevent double borders */
+  border-right: 1px solid #e5e7eb;
+  border-bottom: 1px solid #e5e7eb;
+  border-left: none;
+  padding: 3px 8px;
+  height: 36px;
+  vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  color: #374151;
+  white-space: nowrap;
+  background: white;
+}
+.qhm-td:first-child { border-left: 1px solid #e5e7eb; }
+/* Re-enable text selection inside interactive elements */
+.qhm-td input, .qhm-td select, .qhm-td textarea, .qhm-td [contenteditable] {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* ── Merged master cell ─────────────────────────────────────────────────── */
+.qhm-merged {
+  background: #f9fafb !important;
+  border-left: 3px solid #6366f1 !important;
+  border-right: 1px solid #e5e7eb !important;
+  font-weight: 600;
+  color: #1f2937;
+  vertical-align: top !important;
+  padding-top: 6px !important;
+}
+
+/* ── STICKY — Row number # (left) ───────────────────────────────────────── */
+.qhm-th-sticky-left {
+  position: sticky;
+  left: 0;
+  z-index: 22;
+  background: #f1f5f9;
+  border-left: 1px solid #d1d5db !important;
+  box-shadow: 2px 0 4px rgba(0,0,0,0.07);
+}
+.qhm-td-sticky-left {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: #f8fafc !important;
+  border-left: 1px solid #e5e7eb !important;
+  box-shadow: 2px 0 4px rgba(0,0,0,0.05);
+}
+
+/* ── STICKY — Estado (right) ────────────────────────────────────────────── */
+.qhm-th-sticky-right {
+  position: sticky;
+  right: 0;
+  z-index: 22;
+  background: #eff6ff;
+  border-left: 2px solid #bfdbfe !important;
+  border-right: 1px solid #d1d5db !important;
+  box-shadow: -3px 0 8px rgba(0,0,0,0.08);
+}
+.qhm-td-sticky-right {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  background: white;
+  border-left: 2px solid #e0e7ff !important;
+  border-right: 1px solid #e5e7eb !important;
+  box-shadow: -3px 0 8px rgba(0,0,0,0.05);
+}
+
+/* ── Selection ──────────────────────────────────────────────────────────── */
+.qhm-selected {
+  background: rgba(99, 102, 241, 0.08) !important;
+  outline: 2px solid #6366f1;
+  outline-offset: -2px;
+}
+
+/* ── Rows ───────────────────────────────────────────────────────────────── */
+.qhm-row { transition: background 0.07s; }
+.qhm-row:hover > .qhm-td:not(.qhm-merged) { background: #f0f4ff !important; }
+
+/* Very subtle even-row stripe */
+.qhm-row:nth-child(even) > .qhm-td:not(.qhm-merged):not(.qhm-selected) {
+  background: #fcfcfd;
+}
+
+/* Status tints */
+.qhm-row-pass        > .qhm-td:not(.qhm-merged) { background: rgba(220,252,231,0.30) !important; }
+.qhm-row-fail        > .qhm-td:not(.qhm-merged) { background: rgba(254,226,226,0.30) !important; }
+.qhm-row-blocked     > .qhm-td:not(.qhm-merged) { background: rgba(254,249,195,0.30) !important; }
+.qhm-row-skip        > .qhm-td:not(.qhm-merged) { background: rgba(241,245,249,0.30) !important; }
+.qhm-row-improvement > .qhm-td:not(.qhm-merged) { background: rgba(243,232,255,0.30) !important; }
+
+/* ── Scrollbar ──────────────────────────────────────────────────────────── */
+.overflow-auto::-webkit-scrollbar        { width: 6px; height: 6px; }
+.overflow-auto::-webkit-scrollbar-track  { background: #f9fafb; }
+.overflow-auto::-webkit-scrollbar-thumb  { background: #d1d5db; border-radius: 3px; }

@@ -53,6 +53,7 @@ export default function Cycles() {
   const [isAuditOpen, setIsAuditOpen] = useState(false);
   const [auditSearch, setAuditSearch] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // ── Load data ────────────────────────────────────────────────────────────
   const loadVersions = async () => {
@@ -135,17 +136,33 @@ export default function Cycles() {
   };
 
   const handleDeleteVersion = async (versionId: string, versionName: string) => {
-    if (!profile || !selectedProject) return;
+    if (!profile || !selectedProject) { alert('Sin sesión o proyecto. Recarga la página.'); return; }
     if (!window.confirm(`¿Eliminar el Release "${versionName}" y TODAS sus matrices? Esta acción es irreversible.`)) return;
-    await deleteVersion(selectedProject.id, versionId, versionName, profile.email);
-    loadVersions();
+    setDeletingId(versionId);
+    try {
+      await deleteVersion(selectedProject.id, versionId, versionName, profile.email);
+      loadVersions();
+    } catch (err: any) {
+      console.error('[DeleteVersion]', err);
+      alert(`Error al eliminar release: ${err.message}`);
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const handleDeleteCycle = async (cycleId: string, cycleType: string) => {
-    if (!profile || !selectedProject) return;
-    if (!window.confirm(`¿Eliminar la matriz de tipo ${cycleType}?`)) return;
-    await deleteCycle(selectedProject.id, cycleId, cycleType, profile.email);
-    loadVersions();
+    if (!profile || !selectedProject) { alert('Sin sesión o proyecto. Recarga la página.'); return; }
+    if (!window.confirm(`¿Eliminar la matriz de tipo ${cycleType}? Esta acción borrará todos sus casos y ejecuciones.`)) return;
+    setDeletingId(cycleId);
+    try {
+      await deleteCycle(selectedProject.id, cycleId, cycleType, profile.email);
+      loadVersions();
+    } catch (err: any) {
+      console.error('[DeleteCycle]', err);
+      alert(`Error al eliminar ciclo: ${err.message}`);
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const toggleVersion = (id: string) =>
@@ -272,10 +289,13 @@ export default function Cycles() {
                         </button>
                         <button
                           onClick={e => { e.stopPropagation(); handleDeleteVersion(version.id, version.name); }}
-                          className="text-gray-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-red-50 transition-colors"
+                          disabled={deletingId === version.id}
+                          className="text-gray-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-wait"
                           title="Eliminar release"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          {deletingId === version.id
+                            ? <span className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin inline-block" />
+                            : <Trash2 className="w-4 h-4" />}
                         </button>
                       </>
                     )}
@@ -298,11 +318,18 @@ export default function Cycles() {
                               <p className="text-sm font-semibold text-gray-900">{cycle.type}</p>
                               <p className="text-xs text-gray-500">
                                 {new Date(cycle.created_at).toLocaleString()}
-                                {cycle.custom_values && Object.keys(cycle.custom_values).length > 0 && (
-                                  <span className="ml-2 text-indigo-500">
-                                    · {Object.entries(cycle.custom_values).map(([k, v]) => `${k}: ${v}`).join(' · ')}
-                                  </span>
-                                )}
+                                {cycle.custom_values && (() => {
+                                  // Skip system/internal keys — only show user-facing primitive values
+                                  const SKIP_KEYS = new Set(['merges', '_status_options', 'display_mode', 'hierarchy_depth']);
+                                  const visible = Object.entries(cycle.custom_values)
+                                    .filter(([k, v]) => !SKIP_KEYS.has(k) && !k.startsWith('_') && (typeof v === 'string' || typeof v === 'number'));
+                                  if (visible.length === 0) return null;
+                                  return (
+                                    <span className="ml-2 text-indigo-500">
+                                      · {visible.map(([k, v]) => `${k}: ${v}`).join(' · ')}
+                                    </span>
+                                  );
+                                })()}
                               </p>
                             </div>
                           </div>
@@ -319,11 +346,14 @@ export default function Cycles() {
                             </Link>
                             {canManage && (
                               <button
-                                onClick={() => handleDeleteCycle(cycle.id, cycle.type)}
-                                className="text-gray-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-red-50 transition-colors"
+                                onClick={e => { e.stopPropagation(); handleDeleteCycle(cycle.id, cycle.type); }}
+                                disabled={deletingId === cycle.id}
+                                className="text-gray-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-wait"
                                 title="Eliminar ciclo"
                               >
-                                <Trash2 className="w-4 h-4" />
+                                {deletingId === cycle.id
+                                  ? <span className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin inline-block" />
+                                  : <Trash2 className="w-4 h-4" />}
                               </button>
                             )}
                           </div>
