@@ -8,7 +8,6 @@ import { useAuth } from '../lib/supabase/auth';
 import {
   fetchMatrix,
   addCustomColumn,
-  deleteCustomColumn,
   updateCustomData,
   updateExecution,
   addTestCase,
@@ -221,14 +220,6 @@ export default function Matrix() {
     } catch (err: any) { alert(`Error al agregar columna: ${err.message}`); }
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _handleDeleteColumn = async (colId: string) => {
-    if (!window.confirm('¿Seguro que deseas eliminar esta columna?')) return;
-    try {
-      const updatedCols = await deleteCustomColumn(cycle, colId, profile.email);
-      setCycle({ ...cycle, custom_columns: updatedCols });
-    } catch (err: any) { alert(`Error al eliminar columna: ${err.message}`); }
-  };
 
   const handleUpdateColumn = async (colId: string, patch: { name: string; type: string; options: string[] }) => {
     try {
@@ -318,11 +309,6 @@ export default function Matrix() {
     catch (err: any) { console.error('Error al guardar merges:', err.message); loadMatrix(); }
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _handleSortCol = (colId: string) => {
-    if (sortCol === colId) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    else { setSortCol(colId); setSortDir('asc'); }
-  };
 
   const clearAllFilters = () => { setFilterText(''); setFilterStatus('ALL'); setFilterReviewer('ALL'); setColFilters({}); setSortCol(null); };
 

@@ -137,14 +137,6 @@ export default function MySpaceMatrix() {
     });
   }, [save]);
 
-  // ── Cell update ───────────────────────────────────────────────────────────
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _handleCellChange = (rowId: string, colId: string, value: string) => {
-    updateSection(activeIdx, sec => ({
-      ...sec,
-      rows: sec.rows.map(r => r.id === rowId ? { ...r, cells: { ...r.cells, [colId]: value } } : r),
-    }));
-  };
 
   const handleCellBlur = (rowId: string, colId: string, value: string) => {
     setSections(prev => {
@@ -228,21 +220,6 @@ export default function MySpaceMatrix() {
     });
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _handleDeleteColumn = (colId: string) => {
-    const col = sections[activeIdx]?.columns.find(c => c.id === colId);
-    const colName = col?.name || colId;
-    if (!window.confirm(`¿Eliminar la columna "${colName}"? Se borrarán todos los datos de esa columna en todas las filas.`)) return;
-    setSections(prev => {
-      const next = prev.map((s, i) => i !== activeIdx ? s : {
-        ...s,
-        columns: s.columns.filter(c => c.id !== colId),
-        rows: s.rows.map(r => { const cells = { ...r.cells }; delete cells[colId]; return { ...r, cells }; }),
-      });
-      save(next);
-      return next;
-    });
-  };
 
   // ── Section actions ───────────────────────────────────────────────────────
   const handleAddSection = () => {
@@ -344,16 +321,6 @@ export default function MySpaceMatrix() {
     if (csvInputRef.current) csvInputRef.current.value = '';
   };
 
-  // ── Per-column helpers ─────────────────────────────────────────────────────
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _handleSortCol = (colId: string) => {
-    if (sortCol === colId) {
-      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortCol(colId);
-      setSortDir('asc');
-    }
-  };
 
   const clearAllFilters = () => {
     setFilterText('');
@@ -364,22 +331,6 @@ export default function MySpaceMatrix() {
 
   const hasAnyColFilter = Object.values(colFilters).some(s => s.size > 0);
 
-  // ── Memos for current section (must be at component level, not inside IIFE) ─
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _columnUniqueValues = useMemo(() => {
-    if (sections.length === 0) return {} as Record<string, string[]>;
-    const sec = sections[activeIdx];
-    const map: Record<string, string[]> = {};
-    for (const col of sec.columns) {
-      const vals = new Set<string>();
-      for (const row of sec.rows) {
-        const v = String(row.cells[col.id] ?? '');
-        if (v) vals.add(v);
-      }
-      map[col.id] = Array.from(vals).sort();
-    }
-    return map;
-  }, [sections, activeIdx]);
 
   const displayRows = useMemo(() => {
     if (sections.length === 0) return [] as typeof sections[0]['rows'];
