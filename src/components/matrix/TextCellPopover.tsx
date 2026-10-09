@@ -28,12 +28,13 @@ export default function TextCellPopover({
   // Sync draft when value changes externally
   useEffect(() => { setDraft(value); }, [value]);
 
-  // Calculate fixed position from trigger rect so overflow-hidden never clips it
-  useEffect(() => {
-    if (!isOpen || !triggerRef.current) return;
+  // ── Position helper — called synchronously before opening so the first render
+  //    already has correct coordinates (fixes first-click invisible popover bug)
+  const computePosition = (): React.CSSProperties => {
+    if (!triggerRef.current) return {};
     const rect = triggerRef.current.getBoundingClientRect();
     const popoverWidth = 340;
-    const viewportWidth = window.innerWidth;
+    const viewportWidth  = window.innerWidth;
     const viewportHeight = window.innerHeight;
 
     let left = rect.left;
@@ -42,13 +43,12 @@ export default function TextCellPopover({
     }
 
     let top = rect.bottom + 4;
-    // Flip above if not enough space below (360px = header + textarea max-h + footer)
     if (top + 360 > viewportHeight - 12) {
       top = Math.max(8, rect.top - 364);
     }
 
-    setPopoverStyle({ position: 'fixed', top, left, width: popoverWidth, zIndex: 9999 });
-  }, [isOpen]);
+    return { position: 'fixed', top, left, width: popoverWidth, zIndex: 9999 };
+  };
 
   // Close on outside click
   useEffect(() => {
@@ -125,7 +125,13 @@ export default function TextCellPopover({
       {/* Trigger cell */}
       <button
         ref={triggerRef}
-        onClick={() => setIsOpen(prev => !prev)}
+        onClick={() => {
+          if (!isOpen) {
+            // Compute position NOW (synchronously) so it's ready on first render
+            setPopoverStyle(computePosition());
+          }
+          setIsOpen(prev => !prev);
+        }}
         className={`
           w-full text-left text-xs leading-relaxed px-1 py-0.5 rounded
           transition-colors group
