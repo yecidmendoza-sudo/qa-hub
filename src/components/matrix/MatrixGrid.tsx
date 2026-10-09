@@ -404,6 +404,8 @@ export default function MatrixGrid({
         <div className="px-3 py-1.5 bg-blue-50 border-b border-blue-100 text-xs text-blue-600 flex items-center gap-2 flex-wrap">
           <span>💡 <strong>Combinar:</strong> arrastra para seleccionar → Combinar</span>
           <span className="text-blue-300">|</span>
+          <span><strong>Separar:</strong> click derecho en celda combinada</span>
+          <span className="text-blue-300">|</span>
           <span><strong>Filtrar:</strong> hover en encabezado → ícono embudo</span>
         </div>
       )}
@@ -501,7 +503,13 @@ export default function MatrixGrid({
                       <td key={col.id} rowSpan={rowspan} colSpan={colspan}
                         data-mat-row={rowIdx} data-mat-col={colIdx}
                         className={['qhm-td', isMerged ? 'qhm-merged' : ''].filter(Boolean).join(' ')}
-                        style={{ verticalAlign: isMerged ? 'top' : 'middle', padding: '2px 8px' }}>
+                        style={{ verticalAlign: isMerged ? 'top' : 'middle', padding: '2px 8px' }}
+                        onContextMenu={isMerged && canManage && !readOnly ? (e) => {
+                          e.preventDefault();
+                          // Show merge bar at cursor so "Separar" button is available
+                          setMergeBar({ x: e.clientX, y: e.clientY - 60, r1: rowIdx, r2: rowIdx, c1: colIdx, c2: colIdx });
+                        } : undefined}
+                      >
                         {col.type === 'dropdown' && !readOnly ? (
                           <select value={value}
                             onChange={e => onCellSave?.(caseObj.id, col.id, e.target.value, caseObj)}
