@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Settings2, Download, Upload, X } from 'lucide-react';
 import Papa from 'papaparse';
-import MatrixGrid, { type GridColumnDef } from '../components/matrix/MatrixGrid';
+import MatrixGrid, { type GridColumnDef, type Merge } from '../components/matrix/MatrixGrid';
 
 import {
   parseMarkdownToMatrixData,
@@ -14,6 +14,7 @@ import {
   type MatrixCol,
   type MatrixRow,
 } from '../lib/services/personalMatrixService';
+
 import AddColumnModal from '../components/matrix/AddColumnModal';
 import { getMatrixDataStatusOptions } from '../lib/constants/statusOptions';
 import { supabase } from '../lib/supabase/client';
@@ -565,7 +566,7 @@ export default function MySpaceMatrix() {
                   <MatrixGrid
                     cases={adaptedCases}
                     columns={gridCols}
-                    merges={[]}
+                    merges={(activeSec.merges ?? []) as Merge[]}
                     canManage
                     onStatusChange={(tc, status) => {
                       if (!statusCol) return;
@@ -573,7 +574,13 @@ export default function MySpaceMatrix() {
                     }}
                     onCellSave={(caseId, colId, value) => handleCellBlur(caseId, colId, value)}
                     onDeleteRow={handleDeleteRow}
-                    onMergesChange={() => {}}
+                    onMergesChange={(newMerges) => {
+                      setSections(prev => {
+                        const next = prev.map((s, i) => i !== activeIdx ? s : { ...s, merges: newMerges });
+                        save(next);
+                        return next;
+                      });
+                    }}
                     onBulkFill={(colId, value) => {
                       const col = activeSec.columns.find(c => c.id === colId);
                       if (!col) return;

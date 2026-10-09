@@ -1,5 +1,14 @@
 import { supabase } from '../supabase/client';
 
+/** Represents a rowspan/colspan merge on a cell in a personal matrix section. */
+export type Merge = {
+  colId:       string;
+  startCaseId: string; // row.id of the top-left cell
+  rowCount:    number;
+  colCount?:   number;
+};
+
+
 /**
  * Elimina una versión de matriz personal.
  * Si es la única versión del folder, elimina también el folder.
@@ -97,7 +106,9 @@ export type MatrixSection = {
   title: string;
   columns: MatrixCol[];
   rows: MatrixRow[];
+  merges?: Merge[];
 };
+
 
 /**
  * MatrixData soporta múltiples secciones.
