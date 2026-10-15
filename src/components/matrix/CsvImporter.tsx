@@ -106,6 +106,39 @@ export default function CsvImporter({ cycle, casesCount, onImportDone }: Props) 
     setColConfigs(prev => prev.map((c, i) => i === idx ? { ...c, ...patch } : c));
   }, []);
 
+  const handleModeSwitch = useCallback((newMode: ImportMode) => {
+    if (newMode === importMode) return;
+    setImportMode(newMode);
+    if (newMode === 'flat') {
+      // Strip all hierarchy flags — every row will be independent
+      setColConfigs(prev => prev.map(c => ({ ...c, isHierarchy: false })));
+      setHierEnd(0);
+    } else {
+      // Re-run detection on the original CSV to restore hierarchy cols
+      if (!csvContent) return;
+      const { isHierarchical, hierarchyDepth } = autoDetectHierarchy(csvContent);
+      const parsed = Papa.parse(csvContent, { skipEmptyLines: false });
+      const headerRow = (parsed.data as string[][])[0].map((h: string) => h.trim());
+      let detectedEnd = 0;
+      if (isHierarchical) {
+        let lastEmpty = -1;
+        for (let i = 0; i < headerRow.length; i++) if (headerRow[i] === '') lastEmpty = i;
+        detectedEnd = lastEmpty >= 0 ? lastEmpty + 1 : Math.max(hierarchyDepth, 0);
+      }
+      setHierEnd(detectedEnd);
+      setColConfigs(prev => {
+        let subCount = 0;
+        return prev.map((c, idx) => {
+          const isHier = idx < detectedEnd;
+          const isUnnamed = c.originalName === '';
+          let name = c.originalName;
+          if (isUnnamed && isHier) { subCount++; name = `Sub-nivel ${subCount}`; }
+          return { ...c, isHierarchy: isHier, isUnnamed, name: isHier && isUnnamed ? name : c.name };
+        });
+      });
+    }
+  }, [importMode, csvContent]);
+
   const handleImport = async () => {
     if (!csvContent || colConfigs.length === 0) return;
     setImporting(true);
@@ -332,14 +365,50 @@ export default function CsvImporter({ cycle, casesCount, onImportDone }: Props) 
 
               {/* Auto-detect summary */}
               {colConfigs.length > 0 && (
-                <div className="flex items-start gap-3 p-3 bg-indigo-50 rounded-xl border border-indigo-100 text-sm">
-                  <Sparkles className="w-4 h-4 text-indigo-500 mt-0.5 flex-shrink-0" />
-                  <div className="text-indigo-800">
-                    <p className="font-semibold mb-0.5">Análisis automático completado</p>
-                    <p>
-                      <strong>{colConfigs.length}</strong> columnas · <strong>{importMode === 'hierarchical' ? hierEnd : 0}</strong> de jerarquía · <strong>{autoDropdownCount}</strong> sugeridas como dropdown
-                      {importMode === 'hierarchical' && <span className="ml-2 bg-indigo-200 text-indigo-700 px-1.5 py-0.5 rounded text-xs font-semibold">Jerárquico</span>}
-                    </p>
+                <div className="space-y-3">
+                  <div className="flex items-start gap-3 p-3 bg-indigo-50 rounded-xl border border-indigo-100 text-sm">
+                    <Sparkles className="w-4 h-4 text-indigo-500 mt-0.5 flex-shrink-0" />
+                    <div className="text-indigo-800 flex-1">
+                      <p className="font-semibold mb-0.5">Análisis automático completado</p>
+                      <p>
+                        <strong>{colConfigs.length}</strong> columnas · <strong>{importMode === 'hierarchical' ? hierEnd : 0}</strong> de jerarquía · <strong>{autoDropdownCount}</strong> sugeridas como dropdown
+                        {importMode === 'hierarchical' && <span className="ml-2 bg-indigo-200 text-indigo-700 px-1.5 py-0.5 rounded text-xs font-semibold">Jerárquico</span>}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Mode toggle */}
+                  <div className="flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                    <span className="text-xs font-bold text-amber-800 whitespace-nowrap">Modo de agrupación:</span>
+                    <div className="flex rounded-lg border border-amber-300 overflow-hidden text-xs font-semibold">
+                      <button
+                        type="button"
+                        onClick={() => handleModeSwitch('flat')}
+                        className={`px-3 py-1.5 transition-colors ${
+                          importMode === 'flat'
+                            ? 'bg-amber-500 text-white'
+                            : 'bg-white text-amber-700 hover:bg-amber-100'
+                        }`}
+                      >
+                        ⬜ Plano (filas independientes)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleModeSwitch('hierarchical')}
+                        className={`px-3 py-1.5 border-l border-amber-300 transition-colors ${
+                          importMode === 'hierarchical'
+                            ? 'bg-amber-500 text-white'
+                            : 'bg-white text-amber-700 hover:bg-amber-100'
+                        }`}
+                      >
+                        🗂 Jerárquico (agrupar filas similares)
+                      </button>
+                    </div>
+                    <span className="text-[11px] text-amber-600">
+                      {importMode === 'flat'
+                        ? 'Cada fila es un caso independiente, sin agrupaciones visuales.'
+                        : 'Filas con valores iguales en columnas iniciales se agrupan visualmente.'}
+                    </span>
                   </div>
                 </div>
               )}

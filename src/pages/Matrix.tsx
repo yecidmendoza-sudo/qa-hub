@@ -107,6 +107,9 @@ export default function Matrix() {
     const saved: Merge[] = raw.filter(m => m.colId !== '_title' && m.colId !== 'sort_order');
     if (saved.length > 0 || cases.length === 0) return saved;
 
+    // If __flat__ sentinel is set, user explicitly asked for no merges
+    if (cycle?.custom_values?.__flat__) return [];
+
     // Legacy: auto-compute merges from hierarchy_path for old imported data
     const hierCols = effectiveCols.filter(c => !DATA_ONLY.has(c.id));
     if (!hierCols.length) return [];
@@ -130,7 +133,7 @@ export default function Matrix() {
       }
     }
     return auto;
-  }, [cycle?.custom_values?.merges, cases]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cycle?.custom_values?.merges, cycle?.custom_values?.__flat__, cases]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Cell value getter (for filter/sort) ────────────────────────────────────
 
@@ -248,6 +251,17 @@ export default function Matrix() {
     } catch (err: any) { alert(`Error al cambiar estado: ${err.message}`); }
   };
 
+  const handleClearMerges = async () => {
+    if (!window.confirm('¿Desagrupar todas las filas? Se eliminarán todas las agrupaciones visuales del ciclo. Los datos no se modifican.')) return;
+    try {
+      // Write merges:[] + __flat__:true sentinel so auto-compute doesn't re-activate
+      const newVals = { ...(cycle.custom_values || {}), merges: [], __flat__: true };
+      const { error } = await supabase.from('test_cycles').update({ custom_values: newVals }).eq('id', cycle.id);
+      if (error) throw error;
+      setCycle({ ...cycle, custom_values: newVals });
+    } catch (err: any) { alert(`Error al desagrupar: ${err.message}`); }
+  };
+
   const handleUpdateColumn = async (colId: string, patch: { name: string; type: string; options: string[] }) => {
     try {
       const currentCols: any[] = cycle.custom_columns || [];
@@ -344,56 +358,70 @@ export default function Matrix() {
     <div className="space-y-6">
 
       {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex items-start space-x-3">
-          <Link to="/cycles" className="text-gray-500 hover:text-gray-900 mt-1 flex-shrink-0">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        {/* Left: back arrow + title + status */}
+        <div className="flex items-center gap-3">
+          <Link to="/cycles" className="text-gray-500 hover:text-gray-900 flex-shrink-0">
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div className="min-w-0">
-            <h1 className="text-lg sm:text-2xl font-bold text-gray-900 leading-tight">{cycle.type} TEST</h1>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-lg sm:text-2xl font-bold text-gray-900 leading-tight">{cycle.type} TEST</h1>
+              {/* Status badge inline with title */}
+              <div className="relative group">
+                <button className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold border transition-colors ${cycleStatusCls(cycle.status)}`}>
+                  {cycleStatusIcon(cycle.status)} {cycleStatusLabel(cycle.status)}
+                  {canManage && <ChevronDown className="w-3 h-3 opacity-60" />}
+                </button>
+                {canManage && (
+                  <div className="absolute left-0 top-full mt-1 w-44 bg-white rounded-xl shadow-lg border border-gray-200 py-1 z-30 hidden group-hover:block">
+                    {CYCLE_LIFECYCLE_KEYS.map(s => (
+                      <button
+                        key={s}
+                        onClick={() => handleCycleStatusChange(s)}
+                        className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-gray-50 transition-colors ${
+                          cycle.status === s ? 'font-bold' : 'font-medium'
+                        }`}
+                      >
+                        {cycleStatusIcon(s)}
+                        <span>{cycleStatusLabel(s)}</span>
+                        {cycle.status === s && <span className="ml-auto text-indigo-500 text-xs">✓</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
             <p className="text-sm text-gray-500 truncate">— {cycle.version}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Cycle lifecycle status dropdown */}
-          <div className="relative group">
-            <button className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-bold border transition-colors ${cycleStatusCls(cycle.status)}`}>
-              {cycleStatusIcon(cycle.status)} {cycleStatusLabel(cycle.status)}
-              {canManage && <ChevronDown className="w-3.5 h-3.5 opacity-60" />}
-            </button>
-            {canManage && (
-              <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-xl shadow-lg border border-gray-200 py-1 z-30 hidden group-hover:block">
-                {CYCLE_LIFECYCLE_KEYS.map(s => (
-                  <button
-                    key={s}
-                    onClick={() => handleCycleStatusChange(s)}
-                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-gray-50 transition-colors ${
-                      cycle.status === s ? 'font-bold' : 'font-medium'
-                    }`}
-                  >
-                    {cycleStatusIcon(s)}
-                    <span className={cycleStatusLabel(s) ? '' : ''}>{cycleStatusLabel(s)}</span>
-                    {cycle.status === s && <span className="ml-auto text-indigo-500 text-xs">✓</span>}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+
+        {/* Right: action buttons */}
+        <div className="flex items-center gap-2 flex-shrink-0">
           <ViewPublicButton
             url={`${window.location.origin}${window.location.pathname.replace(/\/$/, '')}#/cycles/public/${id}`}
             title="Ver ciclo público (sin login)"
             size="sm"
           />
           {canManage && (
-            <div className="flex items-center gap-2 flex-wrap">
+            <>
               <CsvImporter cycle={cycle} casesCount={cases.length} onImportDone={loadMatrix} />
+              {(merges.length > 0 || (cycle?.custom_values?.merges?.length > 0 && !cycle?.custom_values?.__flat__)) && (
+                <button
+                  onClick={handleClearMerges}
+                  className="flex items-center px-3 py-2 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded-lg text-sm font-semibold transition-colors border border-amber-200"
+                  title="Eliminar todas las agrupaciones visuales de filas"
+                >
+                  🗳️ Desagrupar
+                </button>
+              )}
               <button
                 onClick={() => setIsColModalOpen(true)}
                 className="flex items-center px-3 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-sm font-semibold transition-colors border border-indigo-200"
               >
                 <Settings2 className="w-4 h-4 mr-1.5" /> Custom Columns
               </button>
-            </div>
+            </>
           )}
         </div>
       </div>
