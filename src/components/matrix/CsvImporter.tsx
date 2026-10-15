@@ -121,18 +121,22 @@ export default function CsvImporter({ cycle, casesCount, onImportDone }: Props) 
 
       // Build/reuse custom_columns
       let customCols: any[] = cycle.custom_columns || [];
-      if (customCols.length === 0 && isHier) {
+      // For both flat and hierarchical: create columns when the cycle has none yet
+      if (customCols.length === 0) {
         const newCols: any[] = [];
-        for (const cc of [...hierCols, ...dataCols]) {
+        const colsSource = isHier ? [...hierCols, ...dataCols] : dataCols;
+        for (const cc of colsSource) {
           if (!cc.name.trim()) continue;
           newCols.push({
             id: crypto.randomUUID(), name: cc.name.trim(), type: cc.type,
             options: cc.type === 'dropdown' ? cc.uniqueVals.map(v => ({ label: v, value: v })) : [],
           });
         }
-        const { error: colErr } = await supabase.from('test_cycles').update({ custom_columns: newCols }).eq('id', cycle.id);
-        if (colErr) throw new Error(`Error creando columnas: ${colErr.message}`);
-        customCols = newCols;
+        if (newCols.length > 0) {
+          const { error: colErr } = await supabase.from('test_cycles').update({ custom_columns: newCols }).eq('id', cycle.id);
+          if (colErr) throw new Error(`Error creando columnas: ${colErr.message}`);
+          customCols = newCols;
+        }
       }
 
       const findColId = (name: string) =>
@@ -206,7 +210,10 @@ export default function CsvImporter({ cycle, casesCount, onImportDone }: Props) 
         const ticketColId = findColId('TICKET') || findColId('TICKET ID');
         const ticketVal   = ticketColId ? customData[ticketColId] : '';
 
-        const titleHdrIdx = headerRow.findIndex(h => /^(task\s*name|title|nombre)$/i.test(h));
+        // Title: prefer explicit header match, then taskName from hierarchy, then fallback
+        const titleHdrIdx = headerRow.findIndex(h =>
+          /^(task\s*name|title|nombre|critical\s*func|functionality|feature|caso\s*de\s*prueba|test\s*case|descripci[oó]n)$/i.test(h)
+        );
         const titleVal    = titleHdrIdx >= 0 ? fRow.filled[titleHdrIdx] : taskName || `Caso ${count}`;
 
         const caseId = crypto.randomUUID();
