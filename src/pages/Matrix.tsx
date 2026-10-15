@@ -8,6 +8,7 @@ import { useAuth } from '../lib/supabase/auth';
 import {
   fetchMatrix,
   addCustomColumn,
+  deleteCustomColumn,
   updateCustomData,
   updateExecution,
   addTestCase,
@@ -17,7 +18,7 @@ import {
   updateCycleMerges,
 } from '../lib/services/matrixService';
 import { supabase } from '../lib/supabase/client';
-import AddColumnModal from '../components/matrix/AddColumnModal';
+import ManageColumnsModal from '../components/matrix/ManageColumnsModal';
 import CsvImporter from '../components/matrix/CsvImporter';
 import MatrixGrid, { type Merge, type GridColumnDef } from '../components/matrix/MatrixGrid';
 import { getCycleStatusOptions } from '../lib/constants/statusOptions';
@@ -221,6 +222,13 @@ export default function Matrix() {
     } catch (err: any) { alert(`Error al agregar columna: ${err.message}`); }
   };
 
+
+  const handleDeleteColumn = async (colId: string) => {
+    try {
+      const updatedCols = await deleteCustomColumn(cycle, colId, profile.email);
+      setCycle({ ...cycle, custom_columns: updatedCols });
+    } catch (err: any) { alert(`Error al eliminar columna: ${err.message}`); }
+  };
 
   const handleUpdateColumn = async (colId: string, patch: { name: string; type: string; options: string[] }) => {
     try {
@@ -465,8 +473,16 @@ export default function Matrix() {
         )}
       </div>
 
-      {/* Add Column Modal */}
-      {isColModalOpen && <AddColumnModal onAdd={handleAddColumn} onClose={() => setIsColModalOpen(false)} />}
+      {/* Manage Columns Modal */}
+      {isColModalOpen && (
+        <ManageColumnsModal
+          existingCols={(cycle?.custom_columns || []).filter((c: any) => c.id !== 'sort_order')}
+          onAdd={handleAddColumn}
+          onUpdate={handleUpdateColumn}
+          onDelete={handleDeleteColumn}
+          onClose={() => setIsColModalOpen(false)}
+        />
+      )}
     </div>
   );
 }

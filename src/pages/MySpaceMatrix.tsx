@@ -15,7 +15,7 @@ import {
   type MatrixRow,
 } from '../lib/services/personalMatrixService';
 
-import AddColumnModal from '../components/matrix/AddColumnModal';
+import ManageColumnsModal from '../components/matrix/ManageColumnsModal';
 import { getMatrixDataStatusOptions } from '../lib/constants/statusOptions';
 import { supabase } from '../lib/supabase/client';
 
@@ -208,6 +208,36 @@ export default function MySpaceMatrix() {
         ...s,
         columns: [...s.columns, newCol],
         rows: s.rows.map(r => ({ ...r, cells: { ...r.cells, [newCol.id]: '' } })),
+      });
+      save(next);
+      return next;
+    });
+  };
+
+  const handleUpdateColumn = (colId: string, patch: { name: string; type: string; options: string[] }) => {
+    setSections(prev => {
+      const next = prev.map((s, i) => i !== activeIdx ? s : {
+        ...s,
+        columns: s.columns.map(c => c.id === colId
+          ? { ...c, name: patch.name, type: patch.type as MatrixCol['type'], options: patch.options.length > 0 ? patch.options : undefined }
+          : c
+        ),
+      });
+      save(next);
+      return next;
+    });
+  };
+
+  const handleDeleteColumn = (colId: string) => {
+    setSections(prev => {
+      const next = prev.map((s, i) => i !== activeIdx ? s : {
+        ...s,
+        columns: s.columns.filter(c => c.id !== colId),
+        rows: s.rows.map(r => {
+          const cells = { ...r.cells };
+          delete cells[colId];
+          return { ...r, cells };
+        }),
       });
       save(next);
       return next;
@@ -614,10 +644,17 @@ export default function MySpaceMatrix() {
           </>
         )}
 
-      {/* ── Add Column Modal ───────────────────────────────────────────── */}
+      {/* ── Manage Columns Modal ──────────────────────────────────────────── */}
       {isColModalOpen && (
-        <AddColumnModal
+        <ManageColumnsModal
+          existingCols={
+            (sections[activeIdx]?.columns || [])
+              .filter(c => c.type !== 'status')
+              .map(c => ({ id: c.id, name: c.name, type: c.type, options: c.options as any }))
+          }
           onAdd={handleAddColumn}
+          onUpdate={handleUpdateColumn}
+          onDelete={handleDeleteColumn}
           onClose={() => setIsColModalOpen(false)}
         />
       )}
