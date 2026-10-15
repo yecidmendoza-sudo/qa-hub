@@ -18,7 +18,7 @@ import {
   updateObservation,
   updateCycleMerges,
 } from '../lib/services/matrixService';
-import { CYCLE_LIFECYCLE, CYCLE_LIFECYCLE_KEYS, cycleStatusCls, cycleStatusLabel, cycleStatusIcon } from '../lib/constants/cycleLifecycle';
+import { CYCLE_LIFECYCLE_KEYS, cycleStatusCls, cycleStatusLabel, cycleStatusIcon } from '../lib/constants/cycleLifecycle';
 import { supabase } from '../lib/supabase/client';
 import ManageColumnsModal from '../components/matrix/ManageColumnsModal';
 import CsvImporter from '../components/matrix/CsvImporter';
