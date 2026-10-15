@@ -14,7 +14,7 @@ const CORS_HEADERS = {
 const QA_HUB_BASE_URL = Deno.env.get("QA_HUB_BASE_URL") ?? "https://qa-hub-qvnt-jade.vercel.app";
 
 // ── Valid execution statuses ───────────────────────────────────────────────
-const VALID_STATUSES = ["PASS", "FAIL", "BLOCKED", "SKIP", "PENDING"] as const;
+const VALID_STATUSES = ["PASS", "FAIL", "BLOCKED", "SKIP", "IMPROVEMENT", "PENDING"] as const;
 type ExecutionStatus = (typeof VALID_STATUSES)[number];
 
 // ── Types ──────────────────────────────────────────────────────────────────
