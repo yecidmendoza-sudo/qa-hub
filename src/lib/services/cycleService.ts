@@ -89,7 +89,7 @@ export const createCycle = async (
       version_id: versionId,
       version: versionName,
       type: cycleType,
-      status: 'IN_PROGRESS',
+      status: 'PENDING',
       custom_values: customValues,
       custom_columns: [],
     })

@@ -16,10 +16,15 @@ import AuditDrawer from '../components/cycles/AuditDrawer';
 
 // ── Status helpers ──────────────────────────────────────────────────────────
 const CYCLE_STATUS_STYLES: Record<string, string> = {
-  PASSED:      'bg-green-100 text-green-800 border-green-200',
-  FAILED:      'bg-red-100 text-red-800 border-red-200',
-  IN_PROGRESS: 'bg-blue-100 text-blue-800 border-blue-200',
-  DRAFT:       'bg-gray-100 text-gray-600 border-gray-200',
+  PENDING:     'bg-gray-100   text-gray-600   border-gray-200',
+  IN_PROGRESS: 'bg-blue-100   text-blue-800   border-blue-200',
+  APPROVED:    'bg-green-100  text-green-800  border-green-200',
+  FAIL:        'bg-red-100    text-red-800    border-red-200',
+  CLOSED:      'bg-slate-100  text-slate-700  border-slate-200',
+  // legacy fallbacks
+  PASSED:      'bg-green-100  text-green-800  border-green-200',
+  FAILED:      'bg-red-100    text-red-800    border-red-200',
+  DRAFT:       'bg-gray-100   text-gray-600   border-gray-200',
 };
 
 

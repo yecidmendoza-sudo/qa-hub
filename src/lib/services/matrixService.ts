@@ -96,6 +96,26 @@ export const deleteCustomColumn = async (
   return updatedCols;
 };
 
+export const reorderCustomColumns = async (
+  cycle: any,
+  orderedColIds: string[],
+  userEmail: string
+) => {
+  const current: any[] = cycle.custom_columns || [];
+  const ordered = orderedColIds
+    .map(id => current.find((c: any) => c.id === id))
+    .filter(Boolean);
+  const rest = current.filter((c: any) => !orderedColIds.includes(c.id));
+  const updatedCols = [...ordered, ...rest];
+  const { error } = await supabase
+    .from('test_cycles')
+    .update({ custom_columns: updatedCols })
+    .eq('id', cycle.id);
+  if (error) throw error;
+  await logAudit(cycle.project_id, userEmail, 'Reordenó Columnas', 'MATRIX', cycle.id, {});
+  return updatedCols;
+};
+
 export const updateCustomData = async (
   caseId: string,
   existingData: Record<string, any>,

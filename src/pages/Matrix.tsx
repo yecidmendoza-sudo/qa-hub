@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Plus, Settings2, X } from 'lucide-react';
+import { ArrowLeft, Plus, Settings2, X, ChevronDown } from 'lucide-react';
 
 import ViewPublicButton from '../components/shared/ViewPublicButton';
 
@@ -9,6 +9,7 @@ import {
   fetchMatrix,
   addCustomColumn,
   deleteCustomColumn,
+  reorderCustomColumns,
   updateCustomData,
   updateExecution,
   addTestCase,
@@ -17,6 +18,7 @@ import {
   updateObservation,
   updateCycleMerges,
 } from '../lib/services/matrixService';
+import { CYCLE_LIFECYCLE, CYCLE_LIFECYCLE_KEYS, cycleStatusCls, cycleStatusLabel, cycleStatusIcon } from '../lib/constants/cycleLifecycle';
 import { supabase } from '../lib/supabase/client';
 import ManageColumnsModal from '../components/matrix/ManageColumnsModal';
 import CsvImporter from '../components/matrix/CsvImporter';
@@ -230,6 +232,22 @@ export default function Matrix() {
     } catch (err: any) { alert(`Error al eliminar columna: ${err.message}`); }
   };
 
+  const handleReorderColumns = async (orderedIds: string[]) => {
+    try {
+      const updatedCols = await reorderCustomColumns(cycle, orderedIds, profile.email);
+      setCycle({ ...cycle, custom_columns: updatedCols });
+    } catch (err: any) { console.error('Error al reordenar columnas:', err.message); }
+  };
+
+  const handleCycleStatusChange = async (newStatus: string) => {
+    if (!window.confirm(`¿Cambiar el estado del ciclo a "${cycleStatusLabel(newStatus)}"?`)) return;
+    try {
+      const { error } = await supabase.from('test_cycles').update({ status: newStatus }).eq('id', cycle.id);
+      if (error) throw error;
+      setCycle({ ...cycle, status: newStatus });
+    } catch (err: any) { alert(`Error al cambiar estado: ${err.message}`); }
+  };
+
   const handleUpdateColumn = async (colId: string, patch: { name: string; type: string; options: string[] }) => {
     try {
       const currentCols: any[] = cycle.custom_columns || [];
@@ -337,6 +355,30 @@ export default function Matrix() {
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Cycle lifecycle status dropdown */}
+          <div className="relative group">
+            <button className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-bold border transition-colors ${cycleStatusCls(cycle.status)}`}>
+              {cycleStatusIcon(cycle.status)} {cycleStatusLabel(cycle.status)}
+              {canManage && <ChevronDown className="w-3.5 h-3.5 opacity-60" />}
+            </button>
+            {canManage && (
+              <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-xl shadow-lg border border-gray-200 py-1 z-30 hidden group-hover:block">
+                {CYCLE_LIFECYCLE_KEYS.map(s => (
+                  <button
+                    key={s}
+                    onClick={() => handleCycleStatusChange(s)}
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-gray-50 transition-colors ${
+                      cycle.status === s ? 'font-bold' : 'font-medium'
+                    }`}
+                  >
+                    {cycleStatusIcon(s)}
+                    <span className={cycleStatusLabel(s) ? '' : ''}>{cycleStatusLabel(s)}</span>
+                    {cycle.status === s && <span className="ml-auto text-indigo-500 text-xs">✓</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <ViewPublicButton
             url={`${window.location.origin}${window.location.pathname.replace(/\/$/, '')}#/cycles/public/${id}`}
             title="Ver ciclo público (sin login)"
@@ -349,7 +391,7 @@ export default function Matrix() {
                 onClick={() => setIsColModalOpen(true)}
                 className="flex items-center px-3 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-sm font-semibold transition-colors border border-indigo-200"
               >
-                <Settings2 className="w-4 h-4 mr-1.5" /> Añadir Columna
+                <Settings2 className="w-4 h-4 mr-1.5" /> Custom Columns
               </button>
             </div>
           )}
@@ -480,6 +522,7 @@ export default function Matrix() {
           onAdd={handleAddColumn}
           onUpdate={handleUpdateColumn}
           onDelete={handleDeleteColumn}
+          onReorder={handleReorderColumns}
           onClose={() => setIsColModalOpen(false)}
         />
       )}

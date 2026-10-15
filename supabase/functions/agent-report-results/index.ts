@@ -79,7 +79,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     if (!VALID_STATUSES.includes(r.status)) {
       return jsonError(
         `Invalid status "${r.status}" for ticket_id "${r.ticket_id}". ` +
-          `Allowed: ${VALID_STATUSES.join(", ")}`,
+        `Allowed: ${VALID_STATUSES.join(", ")}`,
         400,
       );
     }

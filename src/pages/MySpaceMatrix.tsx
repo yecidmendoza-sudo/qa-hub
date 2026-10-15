@@ -244,6 +244,21 @@ export default function MySpaceMatrix() {
     });
   };
 
+  const handleReorderColumn = (orderedIds: string[]) => {
+    setSections(prev => {
+      const next = prev.map((s, i) => {
+        if (i !== activeIdx) return s;
+        const reordered = orderedIds
+          .map(id => s.columns.find(c => c.id === id))
+          .filter(Boolean) as typeof s.columns;
+        const rest = s.columns.filter(c => !orderedIds.includes(c.id));
+        return { ...s, columns: [...reordered, ...rest] };
+      });
+      save(next);
+      return next;
+    });
+  };
+
 
   // ── Section actions ───────────────────────────────────────────────────────
   const handleAddSection = () => {
@@ -475,7 +490,7 @@ export default function MySpaceMatrix() {
             onClick={() => setIsColModalOpen(true)}
             className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-colors"
           >
-            <Settings2 className="w-4 h-4" /> Columna
+            <Settings2 className="w-4 h-4" /> Custom Columns
           </button>
         </div>
       </div>
@@ -655,6 +670,7 @@ export default function MySpaceMatrix() {
           onAdd={handleAddColumn}
           onUpdate={handleUpdateColumn}
           onDelete={handleDeleteColumn}
+          onReorder={handleReorderColumn}
           onClose={() => setIsColModalOpen(false)}
         />
       )}
