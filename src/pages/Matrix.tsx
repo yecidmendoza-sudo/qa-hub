@@ -207,7 +207,7 @@ export default function Matrix() {
 
   // Stats
   const total = cases.length;
-  const statusCounts = { PASS: 0, FAIL: 0, BLOCKED: 0, SKIP: 0, IMPROVEMENT: 0, PENDING: 0 } as Record<string, number>;
+  const statusCounts = Object.fromEntries(statusOptions.map(s => [s, 0])) as Record<string, number>;
   cases.forEach(c => { const s = c.executions?.[0]?.status || 'PENDING'; statusCounts[s] = (statusCounts[s] || 0) + 1; });
   const completed = (statusCounts.PASS || 0) + (statusCounts.FAIL || 0) + (statusCounts.SKIP || 0) + (statusCounts.IMPROVEMENT || 0);
   const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
@@ -458,8 +458,8 @@ export default function Matrix() {
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
           className="text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-400 text-gray-700">
           <option value="ALL">Todos los estados</option>
-          {['PENDING','PASS','FAIL','BLOCKED','SKIP','IMPROVEMENT'].map(s => (
-            <option key={s} value={s}>{STATUS_ICON[s]} {s} ({statusCounts[s] || 0})</option>
+          {statusOptions.map(s => (
+            <option key={s} value={s}>{STATUS_ICON[s] ?? '⬜'} {s} ({statusCounts[s] || 0})</option>
           ))}
         </select>
         {allReviewers.length > 0 && (
